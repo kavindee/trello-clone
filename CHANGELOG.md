@@ -6,6 +6,51 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Task 5 — Frontend Foundation (2026-03-16)
+
+**Added**
+- `frontend/src/types.ts` — TypeScript interfaces `Board`, `List`, `Card`
+  exactly mirroring the FastAPI response schemas; `created_at` kept as
+  `string` (no `Date` conversion); no `any` anywhere.
+- `frontend/src/api.ts` — typed `fetch()` wrappers for all 10 endpoints:
+  `getBoards`, `createBoard`, `getBoard`, `deleteBoard`,
+  `getLists`, `createList`, `deleteList`,
+  `createCard`, `updateCard`, `deleteCard`.
+  `extractError(response)` helper parses FastAPI validation arrays and
+  string detail fields into `{ status, message }` for EC8 error banners.
+  All functions throw `ApiError` on any non-2xx response.
+- `frontend/src/App.tsx` — hash-based router (no `react-router-dom`):
+  `#/` → `<BoardList />` placeholder; `#/boards/:id` → `<BoardDetail id={id} />`
+  placeholder; non-integer / unknown hashes fall back to home view.
+  `hashchange` listener updates route state reactively.
+- `frontend/src/components/BoardList.tsx` — placeholder (`data-testid="board-list"`).
+- `frontend/src/components/BoardDetail.tsx` — placeholder (`data-testid="board-detail"`).
+- `frontend/src/test/setup.ts` — Vitest global setup (`@testing-library/jest-dom`).
+- `frontend/src/test/types.test.ts` — 7 tests: Board / List / Card interface shape.
+- `frontend/src/test/api.test.ts` — 28 tests: all 10 endpoint wrappers + `extractError`
+  (string detail, array detail, non-JSON fallback, empty statusText fallback).
+- `frontend/src/test/App.test.tsx` — 7 tests: routing (home, board detail,
+  unknown hash fallback, hashchange transitions).
+
+**Changed**
+- `frontend/vite.config.ts` — added `test` block (`jsdom` environment,
+  `globals: true`, `setupFiles`); switched import to `vitest/config` so
+  TypeScript resolves the `test` key without errors.
+- `frontend/package.json` — added `vitest`, `@vitest/coverage-v8`, `jsdom`,
+  `@testing-library/react`, `@testing-library/jest-dom`,
+  `@testing-library/user-event` dev dependencies; added `test` and
+  `test:watch` npm scripts.
+
+**Verified**
+- `npm test` → 42 passed (3 test files), 0 errors
+- `npm run build` → TypeScript clean + Vite build 191 kB JS, 0 errors
+- Hash routing: `#/` → BoardList, `#/boards/42` → BoardDetail(42),
+  `#/boards/abc` → BoardList (fallback), `hashchange` reactive ✓
+- All `api.ts` functions fully typed — no `any` ✓
+- `extractError` handles string detail, Pydantic array detail, non-JSON body ✓
+
+---
+
 ### Task 4 — Cards API (2026-03-16)
 
 **Added**

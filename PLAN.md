@@ -209,7 +209,7 @@ serves any request.
 
 ---
 
-- [ ] **Task 5: Frontend Foundation**
+- [x] **Task 5: Frontend Foundation**
       Scaffold Vite + React + TypeScript project. Define `types.ts` (Board,
       List, Card interfaces matching API response schemas). Implement `api.ts`
       with typed `fetch()` wrappers for all 10 endpoints plus a shared
@@ -414,7 +414,7 @@ _(Filled during execution)_
 | T2   | ✅ Done | AC1, AC2, AC3, AC13 (boards), AC14, AC15, AC16, EC1 | 54 tests pass; CORS header verified on live server; cascade atomicity injection test passes |
 | T3   | ✅ Done | AC5, AC6, AC7, AC13 (lists), AC14, AC15, EC2, EC6 | 90 tests pass; position ordering verified; no-reindex confirmed; EC2 injection passes |
 | T4   | ✅ Done | AC8, AC9, AC10, AC11, AC12, AC13 (cards), AC14, AC15, EC3 | 143 tests pass; EC3 strict no-op verified; move position MAX+1 verified; atomic title+move verified |
-| T5   |        |             |       |
+| T5   | ✅ Done | prereq AC1–AC12, EC8 | 42 tests pass; build clean; hash routing verified; all api.ts typed (no any); extractError handles all FastAPI error shapes |
 | T6   |        |             |       |
 | T7   |        |             |       |
 | T8   |        |             |       |
