@@ -2,39 +2,48 @@
  * App.test.tsx
  *
  * Tests for hash-based routing in App.tsx:
- *   #/          → renders <BoardList /> placeholder
+ *   #/          → renders <BoardList /> (now real component)
  *   #/boards/1  → renders <BoardDetail id={1} /> placeholder
  *   unknown     → falls back to <BoardList />
+ *
+ * The api module is mocked so BoardList's useEffect fetch doesn't hit the
+ * network during routing tests.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import App from '../App';
+import * as api from '../api';
+
+vi.mock('../api');
 
 function setHash(hash: string) {
   window.location.hash = hash;
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(api.getBoards).mockResolvedValue([]);
+  setHash('');
+});
+
+afterEach(() => {
+  setHash('');
+});
+
 describe('App routing', () => {
-  beforeEach(() => {
-    setHash('');
-  });
-
-  afterEach(() => {
-    setHash('');
-  });
-
-  it('renders BoardList placeholder at #/', async () => {
+  it('renders BoardList (Boards heading) at #/', async () => {
     setHash('#/');
     const { unmount } = render(<App />);
-    expect(screen.getByTestId('board-list')).toBeInTheDocument();
+    // Real BoardList renders an <h1>Boards</h1>
+    expect(await screen.findByRole('heading', { name: /boards/i })).toBeInTheDocument();
     unmount();
   });
 
-  it('renders BoardList placeholder when hash is empty', () => {
+  it('renders BoardList when hash is empty', async () => {
     setHash('');
     const { unmount } = render(<App />);
-    expect(screen.getByTestId('board-list')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /boards/i })).toBeInTheDocument();
     unmount();
   });
 
@@ -53,24 +62,24 @@ describe('App routing', () => {
     unmount();
   });
 
-  it('falls back to BoardList for unknown hash', () => {
+  it('falls back to BoardList for unknown hash', async () => {
     setHash('#/unknown/route');
     const { unmount } = render(<App />);
-    expect(screen.getByTestId('board-list')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /boards/i })).toBeInTheDocument();
     unmount();
   });
 
-  it('falls back to BoardList for non-integer board id', () => {
+  it('falls back to BoardList for non-integer board id', async () => {
     setHash('#/boards/abc');
     const { unmount } = render(<App />);
-    expect(screen.getByTestId('board-list')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /boards/i })).toBeInTheDocument();
     unmount();
   });
 
   it('switches from BoardList to BoardDetail on hashchange', async () => {
     setHash('#/');
     const { unmount } = render(<App />);
-    expect(screen.getByTestId('board-list')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /boards/i })).toBeInTheDocument();
 
     await act(async () => {
       setHash('#/boards/7');
@@ -92,7 +101,7 @@ describe('App routing', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     });
 
-    expect(screen.getByTestId('board-list')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /boards/i })).toBeInTheDocument();
     unmount();
   });
 });

@@ -232,7 +232,7 @@ serves any request.
 
 ---
 
-- [ ] **Task 6: Board List Page**
+- [x] **Task 6: Board List Page**
       Implement `BoardList.tsx`: fetch and display all boards (`created_at ASC`),
       create board form with inline validation (whitespace → block submit with
       message, >255 chars → block with character counter EC7), delete board with
@@ -415,7 +415,7 @@ _(Filled during execution)_
 | T3   | ✅ Done | AC5, AC6, AC7, AC13 (lists), AC14, AC15, EC2, EC6 | 90 tests pass; position ordering verified; no-reindex confirmed; EC2 injection passes |
 | T4   | ✅ Done | AC8, AC9, AC10, AC11, AC12, AC13 (cards), AC14, AC15, EC3 | 143 tests pass; EC3 strict no-op verified; move position MAX+1 verified; atomic title+move verified |
 | T5   | ✅ Done | prereq AC1–AC12, EC8 | 42 tests pass; build clean; hash routing verified; all api.ts typed (no any); extractError handles all FastAPI error shapes |
-| T6   |        |             |       |
+| T6   | ✅ Done | AC1, AC2, AC3, EC4 (boards), EC5, EC7, EC8 | 76 tests pass; build clean; ErrorBanner auto-dismiss + manual close verified; XSS plain-text confirmed; all validation blocks API call |
 | T7   |        |             |       |
 | T8   |        |             |       |
 | T9   |        |             |       |

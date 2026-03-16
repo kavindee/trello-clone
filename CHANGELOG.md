@@ -6,6 +6,69 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Task 6 — Board List Page (2026-03-16)
+
+**Added**
+- `frontend/src/components/ErrorBanner.tsx` — EC8 inline error banner:
+  - Props: `{ status: number; message: string; onDismiss: () => void }`
+  - Displays HTTP status (bold red) + human-readable message
+  - Auto-dismisses after 5 seconds via `useEffect` + `useRef` (timer started
+    once on mount; latest `onDismiss` always called without restarting clock)
+  - Manual close button (`×`, `aria-label="Dismiss error"`)
+  - `role="alert"` for accessibility
+  - No `alert()`, no `console.error()`, no `innerHTML`
+- `frontend/src/components/BoardList.tsx` — full home-page implementation:
+  - Fetches boards via `getBoards()` on mount; renders each as
+    `<a href="#/boards/:id">` (text child, never innerHTML — EC9)
+  - "No boards yet" centered empty state (EC4)
+  - Create form: live character counter `X/255` (EC7); blocks empty /
+    whitespace with "Board name cannot be empty" (EC5); blocks >255 chars
+    with "Board name must be 255 characters or fewer" (EC7); no API call
+    on invalid input; clears input and appends board on success (AC1);
+    shows ErrorBanner on failure without mutating list (EC8)
+  - Delete button per board: removes from list on success (AC3); shows
+    ErrorBanner on failure without mutating list (EC8)
+  - Validation error clears as user types
+- `frontend/src/styles/ErrorBanner.module.css` — yellow/red banner with
+  slide-down animation; close button right-aligned; transitions
+- `frontend/src/styles/BoardList.module.css` — clean form layout; gray
+  counter; red validation messages; card-style board items; hover states
+
+**Changed**
+- `frontend/src/test/App.test.tsx` — updated routing tests to use real
+  `BoardList` output (heading query) instead of removed placeholder
+  `data-testid`; added `vi.mock('../api')` + `getBoards` stub so routing
+  tests don't fail on network calls
+- `frontend/src/test/BoardList.test.tsx` — removed unused `act` import
+  (strict TypeScript `noUnusedLocals`)
+
+**Added (tests — TDD)**
+- `frontend/src/test/ErrorBanner.test.tsx` — 8 tests: renders status +
+  message, close button calls onDismiss, auto-dismiss at 5 s, no early
+  dismiss at 4999 ms, timer cancelled on unmount, `role="alert"` present
+- `frontend/src/test/BoardList.test.tsx` — 26 tests: mount fetch, board
+  links, fetch failure banner, empty state, character counter, whitespace
+  blocked, 256-char blocked, 255-char passes, create appends, create clears
+  input, create removes empty state, create failure banner, delete buttons,
+  delete calls API, delete removes item, delete shows empty state, delete
+  failure banner, XSS plain-text, banner dismiss, validation error clears
+
+**Verified**
+- `npm test` → **76 passed** (5 test files), 0 errors
+- `npm run build` → TypeScript clean + Vite 194 kB JS, 0 errors
+- All verifiable output criteria met:
+  - Create board → appends immediately, no reload ✓
+  - Delete board → removes immediately, no reload ✓
+  - Empty name → inline message, zero API calls ✓
+  - Whitespace name → inline message, zero API calls ✓
+  - 256-char name → inline message, zero API calls ✓
+  - API failure → ErrorBanner (status + message), list unchanged ✓
+  - ErrorBanner auto-dismisses at 5 s, manual close works ✓
+  - Empty list → "No boards yet" centered ✓
+  - XSS `<script>` title renders as plain text ✓
+
+---
+
 ### Task 5 — Frontend Foundation (2026-03-16)
 
 **Added**
