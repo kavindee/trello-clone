@@ -6,6 +6,35 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Task 4 — Cards API (2026-03-16)
+
+**Added**
+- `backend/routers/cards.py` — 3 endpoints:
+  - `POST  /lists/{id}/cards`  → 201; `position = COUNT(existing cards)` (0-based
+    append); full title validation via `CardCreate`; 404 if list missing.
+  - `PATCH /cards/{id}`        → 200; at least one of `title`/`list_id` required
+    (→ 422); EC3 no-op if `list_id == current`; move appends
+    `position = MAX(target) + 1` (0 for empty target); title + move applied
+    atomically in one `db.commit()`; 404 for missing card or target list.
+  - `DELETE /cards/{id}`       → 204; no reindex of siblings; 404 if missing.
+- `backend/tests/test_cards.py` — 53 tests covering all 3 endpoints, position
+  ordering, no-reindex-after-delete, PATCH title-only / move-only / both-atomic,
+  EC3 no-op (including strict same-list-with-title variant), 422 body validation
+  (9 create + 5 patch cases), 404s for card and target list.
+
+**Changed**
+- `backend/main.py` — cards router imported and registered.
+
+**Verified**
+- `pytest backend/tests/test_cards.py` → 53 passed, 0 errors
+- `pytest backend/tests/` → 143 passed, 0 errors (all prior tasks green)
+- EC3 strict: `PATCH {title, list_id=current}` → no write, unchanged card ✓
+- Move appends to bottom: `MAX(position) + 1`; empty target → position 0 ✓
+- Both title + list_id applied atomically in single `db.commit()` ✓
+- `PATCH {}` and `PATCH {title: null, list_id: null}` both return 422 ✓
+
+---
+
 ### Task 3 — Lists API (2026-03-16)
 
 **Added**

@@ -186,7 +186,7 @@ serves any request.
 
 ---
 
-- [ ] **Task 4: Cards API**
+- [x] **Task 4: Cards API**
       Implement `POST /lists/{id}/cards`, `PATCH /cards/{id}`, `DELETE /cards/{id}`.
       PATCH handles title update, list move, or both atomically. Move appends
       card to bottom of target list (`MAX(position) + 1`). Same-list move is a
@@ -413,7 +413,7 @@ _(Filled during execution)_
 | T1   | ✅ Done | prereq AC13–AC16 | 21 smoke tests pass; kanban.db created; startup guard exits 1 on failure |
 | T2   | ✅ Done | AC1, AC2, AC3, AC13 (boards), AC14, AC15, AC16, EC1 | 54 tests pass; CORS header verified on live server; cascade atomicity injection test passes |
 | T3   | ✅ Done | AC5, AC6, AC7, AC13 (lists), AC14, AC15, EC2, EC6 | 90 tests pass; position ordering verified; no-reindex confirmed; EC2 injection passes |
-| T4   |        |             |       |
+| T4   | ✅ Done | AC8, AC9, AC10, AC11, AC12, AC13 (cards), AC14, AC15, EC3 | 143 tests pass; EC3 strict no-op verified; move position MAX+1 verified; atomic title+move verified |
 | T5   |        |             |       |
 | T6   |        |             |       |
 | T7   |        |             |       |
