@@ -416,3 +416,182 @@ def test_get_cards_position_not_reindexed_after_delete(client):
     by_title = {c["title"]: c["position"] for c in cards}
     assert by_title["A"] == 0
     assert by_title["C"] == 2  # position not reindexed
+
+
+# ---------------------------------------------------------------------------
+# PATCH /lists/{id} — deadline support (Task A)
+# ---------------------------------------------------------------------------
+
+
+def _create_card_in_list(client, list_id: int, title: str = "Card") -> dict:
+    resp = client.post(f"/lists/{list_id}/cards", json={"title": title})
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+class TestPatchList:
+    """PATCH /lists/{id} — name, deadline, or both."""
+
+    def test_patch_name_only_returns_200(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id, "Old Name")
+        r = client.patch(f"/lists/{lst['id']}", json={"name": "New Name"})
+        assert r.status_code == 200
+
+    def test_patch_name_only_updates_name(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id, "Before")
+        data = client.patch(f"/lists/{lst['id']}", json={"name": "After"}).json()
+        assert data["name"] == "After"
+
+    def test_patch_name_only_preserves_other_fields(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id, "Original")
+        data = client.patch(f"/lists/{lst['id']}", json={"name": "Changed"}).json()
+        assert data["id"] == lst["id"]
+        assert data["board_id"] == board_id
+        assert data["position"] == lst["position"]
+
+    def test_patch_deadline_only_returns_200(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        r = client.patch(f"/lists/{lst['id']}", json={"deadline": "2025-12-31"})
+        assert r.status_code == 200
+
+    def test_patch_deadline_only_sets_deadline(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        data = client.patch(
+            f"/lists/{lst['id']}", json={"deadline": "2025-06-15"}
+        ).json()
+        assert data["deadline"] == "2025-06-15"
+
+    def test_patch_deadline_only_preserves_name(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id, "Kept")
+        data = client.patch(
+            f"/lists/{lst['id']}", json={"deadline": "2025-06-15"}
+        ).json()
+        assert data["name"] == "Kept"
+
+    def test_patch_both_name_and_deadline(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id, "Old")
+        data = client.patch(
+            f"/lists/{lst['id']}",
+            json={"name": "New", "deadline": "2025-09-01"},
+        ).json()
+        assert data["name"] == "New"
+        assert data["deadline"] == "2025-09-01"
+
+    def test_patch_clear_deadline_with_null(self, client):
+        """Sending deadline=null must clear a previously-set deadline."""
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        # Set deadline first
+        client.patch(f"/lists/{lst['id']}", json={"deadline": "2025-01-01"})
+        # Now clear it
+        data = client.patch(
+            f"/lists/{lst['id']}", json={"deadline": None}
+        ).json()
+        assert data["deadline"] is None
+
+    def test_patch_clear_deadline_persists(self, client, db):
+        """Cleared deadline must be None in the DB after reload."""
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        client.patch(f"/lists/{lst['id']}", json={"deadline": "2025-03-01"})
+        client.patch(f"/lists/{lst['id']}", json={"deadline": None})
+        db.expire_all()
+        fresh = db.get(models.List, lst["id"])
+        assert fresh.deadline is None
+
+    def test_patch_deadline_persists_in_db(self, client, db):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        client.patch(f"/lists/{lst['id']}", json={"deadline": "2025-11-30"})
+        db.expire_all()
+        fresh = db.get(models.List, lst["id"])
+        # SQLite stores DATE as string; compare as string
+        assert str(fresh.deadline) == "2025-11-30"
+
+    def test_patch_list_404_on_missing(self, client):
+        r = client.patch("/lists/99999", json={"name": "Ghost"})
+        assert r.status_code == 404
+
+    def test_patch_list_404_detail_contains_id(self, client):
+        r = client.patch("/lists/99999", json={"name": "Ghost"})
+        assert "99999" in r.json()["detail"]
+
+    def test_patch_list_422_neither_field(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        r = client.patch(f"/lists/{lst['id']}", json={})
+        assert r.status_code == 422
+
+    def test_patch_list_422_explicit_null_name_only(self, client):
+        """Sending only {name: null} with no deadline is invalid."""
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        r = client.patch(f"/lists/{lst['id']}", json={"name": None})
+        assert r.status_code == 422
+
+    def test_patch_list_response_has_deadline_field(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        data = client.patch(f"/lists/{lst['id']}", json={"name": "X"}).json()
+        assert "deadline" in data
+
+    def test_patch_list_new_list_deadline_is_null(self, client):
+        """Freshly created list must have deadline=null."""
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        data = client.patch(f"/lists/{lst['id']}", json={"name": "Any"}).json()
+        assert data["deadline"] is None
+
+    def test_patch_list_invalid_name_rejected(self, client):
+        """Whitespace name in PATCH must return 422."""
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        r = client.patch(f"/lists/{lst['id']}", json={"name": "   "})
+        assert r.status_code == 422
+
+
+class TestDeadlineInGetEndpoints:
+    """deadline field must appear in GET /boards/{id}/lists and GET /lists/{id}/cards."""
+
+    def test_get_lists_response_includes_deadline_field(self, client):
+        board_id = _create_board(client)
+        _create_list(client, board_id, "With Deadline")
+        lists = client.get(f"/boards/{board_id}/lists").json()
+        assert len(lists) == 1
+        assert "deadline" in lists[0]
+
+    def test_get_lists_new_list_deadline_is_null(self, client):
+        board_id = _create_board(client)
+        _create_list(client, board_id)
+        data = client.get(f"/boards/{board_id}/lists").json()[0]
+        assert data["deadline"] is None
+
+    def test_get_lists_deadline_reflects_patch(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        client.patch(f"/lists/{lst['id']}", json={"deadline": "2026-01-15"})
+        data = client.get(f"/boards/{board_id}/lists").json()[0]
+        assert data["deadline"] == "2026-01-15"
+
+    def test_get_cards_response_includes_due_date_field(self, client):
+        # Cards no longer carry 'deadline'; they use 'due_date' instead.
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        _create_card_in_list(client, lst["id"])
+        cards = client.get(f"/lists/{lst['id']}/cards").json()
+        assert len(cards) == 1
+        assert "due_date" in cards[0]
+
+    def test_get_cards_new_card_due_date_is_null(self, client):
+        board_id = _create_board(client)
+        lst = _create_list(client, board_id)
+        _create_card_in_list(client, lst["id"])
+        card = client.get(f"/lists/{lst['id']}/cards").json()[0]
+        assert card["due_date"] is None

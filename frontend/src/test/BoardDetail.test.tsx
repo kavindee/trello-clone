@@ -20,12 +20,21 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import BoardDetail from '../components/BoardDetail';
 import * as api from '../api';
 
+// Mock CardModal so BoardDetail tests don't pull in DatePicker
+vi.mock('../components/CardModal', () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="card-modal">
+      <button aria-label="modal-close" onClick={onClose}>Close</button>
+    </div>
+  ),
+}));
+
 vi.mock('../api');
 
 const mockBoard = { id: 1, name: 'My Board', created_at: '2025-01-01T00:00:00Z' };
 const mockLists = [
-  { id: 10, board_id: 1, name: 'Todo', position: 0, created_at: '' },
-  { id: 11, board_id: 1, name: 'Done', position: 1, created_at: '' },
+  { id: 10, board_id: 1, name: 'Todo', position: 0, deadline: null as string | null, created_at: '' },
+  { id: 11, board_id: 1, name: 'Done', position: 1, deadline: null as string | null, created_at: '' },
 ];
 
 beforeEach(() => {
@@ -205,7 +214,7 @@ describe('create list', () => {
   it('calls createList with board id and trimmed name', async () => {
     vi.mocked(api.getBoard).mockResolvedValue(mockBoard);
     vi.mocked(api.getLists).mockResolvedValue([]);
-    const newList = { id: 20, board_id: 1, name: 'Backlog', position: 0, created_at: '' };
+    const newList = { id: 20, board_id: 1, name: 'Backlog', position: 0, deadline: null as string | null, created_at: '' };
     vi.mocked(api.createList).mockResolvedValue(newList);
     render(<BoardDetail id={1} />);
     await screen.findByText('No lists yet');
@@ -220,7 +229,7 @@ describe('create list', () => {
   it('appends new list column without reload', async () => {
     vi.mocked(api.getBoard).mockResolvedValue(mockBoard);
     vi.mocked(api.getLists).mockResolvedValue([mockLists[0]]);
-    const newList = { id: 20, board_id: 1, name: 'Review', position: 1, created_at: '' };
+    const newList = { id: 20, board_id: 1, name: 'Review', position: 1, deadline: null as string | null, created_at: '' };
     vi.mocked(api.createList).mockResolvedValue(newList);
     render(<BoardDetail id={1} />);
     await screen.findByText('Todo');
@@ -234,7 +243,7 @@ describe('create list', () => {
   it('clears input after successful create', async () => {
     vi.mocked(api.getBoard).mockResolvedValue(mockBoard);
     vi.mocked(api.getLists).mockResolvedValue([]);
-    const newList = { id: 20, board_id: 1, name: 'Sprint', position: 0, created_at: '' };
+    const newList = { id: 20, board_id: 1, name: 'Sprint', position: 0, deadline: null as string | null, created_at: '' };
     vi.mocked(api.createList).mockResolvedValue(newList);
     render(<BoardDetail id={1} />);
     await screen.findByText('No lists yet');
@@ -247,7 +256,7 @@ describe('create list', () => {
   it('removes "No lists yet" after first list created', async () => {
     vi.mocked(api.getBoard).mockResolvedValue(mockBoard);
     vi.mocked(api.getLists).mockResolvedValue([]);
-    const newList = { id: 20, board_id: 1, name: 'Alpha', position: 0, created_at: '' };
+    const newList = { id: 20, board_id: 1, name: 'Alpha', position: 0, deadline: null as string | null, created_at: '' };
     vi.mocked(api.createList).mockResolvedValue(newList);
     render(<BoardDetail id={1} />);
     await screen.findByText('No lists yet');
@@ -285,10 +294,8 @@ describe('delete list', () => {
     vi.mocked(api.deleteList).mockResolvedValue(undefined);
     render(<BoardDetail id={1} />);
     await screen.findByText('Todo');
-    // click delete on the first list column (Todo)
-    const items = screen.getAllByRole('listitem');
-    const todoItem = items.find((el) => el.textContent?.includes('Todo'));
-    const deleteBtn = todoItem!.querySelector('button')!;
+    // click Delete on the Todo list column (use aria-label to avoid hitting 📅 button)
+    const deleteBtn = screen.getByRole('button', { name: /delete list todo/i });
     fireEvent.click(deleteBtn);
     await waitFor(() => expect(screen.queryByText('Todo')).not.toBeInTheDocument());
     expect(screen.getByText('Done')).toBeInTheDocument(); // sibling untouched
@@ -327,6 +334,7 @@ describe('EC9 — XSS safety', () => {
       board_id: 1,
       name: '<script>alert(1)</script>',
       position: 0,
+      deadline: null as string | null,
       created_at: '',
     };
     vi.mocked(api.getBoard).mockResolvedValue(mockBoard);
@@ -355,5 +363,62 @@ describe('validation error clears on typing', () => {
       target: { value: 'A' },
     });
     expect(screen.queryByText(/list name cannot be empty/i)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task D — board-wide filter bar
+// No fake timers: use absolute dates ('2020-01-01' always past, '2099-12-31' always future)
+// ---------------------------------------------------------------------------
+
+describe('BoardDetail — board-wide filter (Task D)', () => {
+  beforeEach(() => {
+    vi.mocked(api.getBoard).mockResolvedValue(mockBoard);
+    vi.mocked(api.getLists).mockResolvedValue([mockLists[0]]); // single list
+    vi.mocked(api.getCards).mockResolvedValue([
+      { id: 100, list_id: 10, title: 'Overdue Card', position: 0, description: null, start_date: null, due_date: '2020-01-01', created_at: '' },
+      { id: 101, list_id: 10, title: 'Future Card',  position: 1, description: null, start_date: null, due_date: '2099-12-31', created_at: '' },
+    ]);
+  });
+
+  it('renders board-wide filter buttons: All, Due soon, Overdue', async () => {
+    render(<BoardDetail id={1} />);
+    await screen.findByText('Overdue Card');
+    expect(screen.getByRole('button', { name: /board filter: all/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /board filter: due soon/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /board filter: overdue/i })).toBeInTheDocument();
+  });
+
+  it('board-wide "Overdue" shows only overdue cards across all columns', async () => {
+    render(<BoardDetail id={1} />);
+    await screen.findByText('Overdue Card');
+    fireEvent.click(screen.getByRole('button', { name: /board filter: overdue/i }));
+    expect(screen.getByText('Overdue Card')).toBeInTheDocument();
+    expect(screen.queryByText('Future Card')).not.toBeInTheDocument();
+  });
+
+  it('board-wide "Overdue" disables per-column filter button', async () => {
+    render(<BoardDetail id={1} />);
+    await screen.findByText('Overdue Card');
+    fireEvent.click(screen.getByRole('button', { name: /board filter: overdue/i }));
+    // data-testid="column-filter-btn" targets only the per-column button
+    expect(screen.getByTestId('column-filter-btn')).toBeDisabled();
+  });
+
+  it('board-wide "All" re-enables per-column filter button', async () => {
+    render(<BoardDetail id={1} />);
+    await screen.findByText('Overdue Card');
+    fireEvent.click(screen.getByRole('button', { name: /board filter: overdue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /board filter: all/i }));
+    expect(screen.getByTestId('column-filter-btn')).not.toBeDisabled();
+  });
+
+  it('board-wide "All" restores all cards visibility', async () => {
+    render(<BoardDetail id={1} />);
+    await screen.findByText('Overdue Card');
+    fireEvent.click(screen.getByRole('button', { name: /board filter: overdue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /board filter: all/i }));
+    expect(screen.getByText('Overdue Card')).toBeInTheDocument();
+    expect(screen.getByText('Future Card')).toBeInTheDocument();
   });
 });

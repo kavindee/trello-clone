@@ -11,13 +11,19 @@ PATCH / EC3 (same-list move is a no-op)
 ----------------------------------------
 If the PATCH body supplies a list_id that equals the card's current list_id,
 the entire operation is treated as a no-op: the card is returned unchanged and
-no database write is performed.  This applies even when a title is also present
-in the payload (SPEC EC3: "performs no write, returns the unchanged card object").
+no database write is performed.  This applies even when other fields are also
+present in the payload (SPEC EC3: "performs no write, returns the unchanged card
+object").
 
 PATCH atomicity
 ---------------
-When both title and list_id (pointing to a different list) are supplied, both
-mutations are applied inside a single transaction (single db.commit()).
+All mutations (title, list move, description, start_date, due_date) are applied
+inside a single transaction (single db.commit()).
+
+Sentinel pattern
+----------------
+description / start_date / due_date use model_fields_set to distinguish
+"not provided" (leave unchanged) from "explicitly null" (clear the field).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -52,7 +58,7 @@ def create_card(
     appends to the end regardless of any gaps left by prior deletes (AC9).
 
     Returns 404 if the list does not exist (AC15).
-    Returns 422 if the title is invalid (AC14, EC5, EC7, EC9).
+    Returns 422 if the title is invalid or start_date > due_date (AC14).
     """
     lst = db.get(models.List, list_id)
     if lst is None:
@@ -66,7 +72,14 @@ def create_card(
         .where(models.Card.list_id == list_id)
     ).scalar()
 
-    card = models.Card(list_id=list_id, title=payload.title, position=position)
+    card = models.Card(
+        list_id=list_id,
+        title=payload.title,
+        position=position,
+        description=payload.description,
+        start_date=payload.start_date,
+        due_date=payload.due_date,
+    )
     db.add(card)
     db.commit()
     db.refresh(card)
@@ -84,23 +97,37 @@ def patch_card(
     payload: schemas.CardPatch,
     db: Session = Depends(get_db),
 ):
-    """Update a card's title and/or move it to another list.
+    """Update a card's fields and/or move it to another list.
 
     Rules:
-    • At least one of `title` / `list_id` must be present — else 422 (AC14).
+    • At least one field must be present — else 422 (AC14).
     • EC3: if list_id == card's current list_id the entire operation is a
       no-op; the unchanged card is returned with no write performed.
     • If list_id points to a different list: move card to the bottom of that
       list (position = MAX + 1, or 0 if the target is empty).
-    • When both title and a different list_id are provided, both mutations are
-      applied atomically in a single transaction.
+    • All mutations are applied atomically in a single transaction.
     • Returns 404 if the card or the target list does not exist (AC15).
+    • date-order validation (start_date <= due_date) is enforced in the schema.
     """
-    # ── Guard: at least one field required ───────────────────────────────
-    if payload.title is None and payload.list_id is None:
+    # ── Detect which optional fields were explicitly provided ─────────────
+    description_set = "description" in payload.model_fields_set
+    start_date_set  = "start_date"  in payload.model_fields_set
+    due_date_set    = "due_date"    in payload.model_fields_set
+
+    # ── Guard: at least one field required ────────────────────────────────
+    if (
+        payload.title is None
+        and payload.list_id is None
+        and not description_set
+        and not start_date_set
+        and not due_date_set
+    ):
         raise HTTPException(
             status_code=422,
-            detail="At least one of 'title' or 'list_id' must be provided.",
+            detail=(
+                "At least one of 'title', 'list_id', 'description', "
+                "'start_date', or 'due_date' must be provided."
+            ),
         )
 
     # ── Fetch card ────────────────────────────────────────────────────────
@@ -110,10 +137,8 @@ def patch_card(
             status_code=404, detail=f"Card {card_id} not found"
         )
 
-    # ── EC3: same-list move → no-op ───────────────────────────────────────
+    # ── EC3: same-list move → no-op (no write of any field) ───────────────
     if payload.list_id is not None and payload.list_id == card.list_id:
-        # SPEC EC3: "performs no write, returns the unchanged card object."
-        # This applies even when a title is also supplied in the payload.
         return card
 
     # ── Apply title update ────────────────────────────────────────────────
@@ -128,18 +153,27 @@ def patch_card(
                 status_code=404,
                 detail=f"List {payload.list_id} not found",
             )
-
-        # MAX(position) in target list; NULL when the list is empty → use 0.
         max_pos = db.execute(
             select(func.max(models.Card.position)).where(
                 models.Card.list_id == payload.list_id
             )
         ).scalar()
-
         card.list_id = payload.list_id
         card.position = (max_pos + 1) if max_pos is not None else 0
 
-    # ── Single commit covers title + move atomically ──────────────────────
+    # ── Apply description update ──────────────────────────────────────────
+    if description_set:
+        card.description = payload.description   # None clears; str sets
+
+    # ── Apply start_date update ───────────────────────────────────────────
+    if start_date_set:
+        card.start_date = payload.start_date     # None clears; date sets
+
+    # ── Apply due_date update ─────────────────────────────────────────────
+    if due_date_set:
+        card.due_date = payload.due_date         # None clears; date sets
+
+    # ── Single commit covers all mutations atomically ─────────────────────
     db.commit()
     db.refresh(card)
     return card

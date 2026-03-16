@@ -56,12 +56,16 @@ def test_board_columns():
 
 def test_list_columns():
     cols = {c.name for c in models.List.__table__.columns}
-    assert cols == {"id", "board_id", "name", "position", "created_at"}
+    assert cols == {"id", "board_id", "name", "position", "deadline", "created_at"}
 
 
 def test_card_columns():
     cols = {c.name for c in models.Card.__table__.columns}
-    assert cols == {"id", "list_id", "title", "position", "created_at"}
+    assert cols == {
+        "id", "list_id", "title", "position",
+        "description", "start_date", "due_date",
+        "created_at",
+    }
 
 
 # ---------------------------------------------------------------------------

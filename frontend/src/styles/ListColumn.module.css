@@ -99,6 +99,80 @@
   font-style: italic;
 }
 
+/* ── Sort / filter toolbar (Task D) ──────────────────────── */
+
+.toolbar {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.35rem 0.65rem 0.25rem;
+  background: #dde3ec;
+  border-bottom: 1px solid #cbd5e1;
+  flex-shrink: 0;
+}
+
+.toolbarBtn {
+  flex: 1;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.22rem 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.toolbarBtn:hover:not(:disabled) {
+  background: #e0e7ff;
+  color: #3730a3;
+  border-color: #a5b4fc;
+}
+
+.toolbarBtnActive {
+  background: #4f46e5;
+  color: #fff;
+  border-color: #4338ca;
+}
+
+.toolbarBtnActive:hover:not(:disabled) {
+  background: #4338ca;
+  color: #fff;
+}
+
+.toolbarBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── "Add a card" button ──────────────────────────────────── */
+
+.addCardBtn {
+  display: block;
+  width: calc(100% - 1.3rem);
+  margin: 0.5rem 0.65rem 0.65rem;
+  padding: 0.42rem 0.65rem;
+  font-size: 0.83rem;
+  font-weight: 500;
+  background: transparent;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.addCardBtn:hover {
+  background: rgba(79, 70, 229, 0.05);
+  color: #4f46e5;
+  border-color: #818cf8;
+}
+
 /* ── Create card form ─────────────────────────────────────── */
 
 .createForm {

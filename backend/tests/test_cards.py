@@ -11,6 +11,7 @@ Covers:
            PATCH with neither field → 422
   - AC15 — 404 for missing list (create/move) and missing card (patch/delete)
   - EC3  — PATCH list_id == current list_id → 200, no DB write, unchanged card
+  - New  — description, start_date, due_date fields (replaces deadline)
 """
 
 import models
@@ -566,3 +567,286 @@ class TestCardPatchTitleValidation:
             ).status_code
             == 200
         )
+
+
+# ---------------------------------------------------------------------------
+# New fields: description, start_date, due_date (replaces deadline on cards)
+# ---------------------------------------------------------------------------
+
+
+class TestCardNewFields:
+    """description, start_date, and due_date fields on cards.
+
+    deadline has been removed from cards and superseded by due_date.
+    Lists still carry their own deadline column (unrelated).
+    """
+
+    def _setup(self, client):
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        card = _make_card(client, lid)
+        return bid, lid, card
+
+    # ── GET / POST response includes the three new fields ─────────────────
+
+    def test_new_card_fields_are_null(self, client):
+        _, lid, _ = self._setup(client)
+        card = client.get(f"/lists/{lid}/cards").json()[0]
+        assert card["description"] is None
+        assert card["start_date"] is None
+        assert card["due_date"] is None
+
+    def test_create_card_response_includes_new_fields(self, client):
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        card = _make_card(client, lid, "My Card")
+        assert "description" in card
+        assert "start_date" in card
+        assert "due_date" in card
+
+    # ── Create card with description ──────────────────────────────────────
+
+    def test_create_card_with_description_returns_201(self, client):
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        r = client.post(f"/lists/{lid}/cards", json={"title": "T", "description": "My desc"})
+        assert r.status_code == 201
+
+    def test_create_card_with_description_persists_in_get(self, client):
+        """Create card with description → persists in GET response."""
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        client.post(f"/lists/{lid}/cards", json={"title": "T", "description": "Hello"})
+        card = client.get(f"/lists/{lid}/cards").json()[0]
+        assert card["description"] == "Hello"
+
+    def test_create_card_description_in_post_response(self, client):
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        r = client.post(f"/lists/{lid}/cards", json={"title": "T", "description": "Desc"})
+        assert r.json()["description"] == "Desc"
+
+    # ── Create card with start_date and due_date ──────────────────────────
+
+    def test_create_card_with_start_and_due_date(self, client):
+        """Create card with start_date and due_date → both persist."""
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        r = client.post(f"/lists/{lid}/cards", json={
+            "title": "T",
+            "start_date": "2025-01-01",
+            "due_date": "2025-12-31",
+        })
+        assert r.status_code == 201
+        data = r.json()
+        assert data["start_date"] == "2025-01-01"
+        assert data["due_date"] == "2025-12-31"
+
+    def test_create_card_with_only_start_date(self, client):
+        """Create card with only start_date (no due_date) → 201 (valid)."""
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        r = client.post(f"/lists/{lid}/cards", json={"title": "T", "start_date": "2025-01-01"})
+        assert r.status_code == 201
+        assert r.json()["start_date"] == "2025-01-01"
+        assert r.json()["due_date"] is None
+
+    def test_create_card_start_date_after_due_date_422(self, client):
+        """Create card with start_date > due_date → 422."""
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        r = client.post(f"/lists/{lid}/cards", json={
+            "title": "T",
+            "start_date": "2025-12-31",
+            "due_date": "2025-01-01",
+        })
+        assert r.status_code == 422
+
+    def test_create_card_start_date_equal_due_date_valid(self, client):
+        """start_date == due_date → 201 (boundary is valid)."""
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        r = client.post(f"/lists/{lid}/cards", json={
+            "title": "T",
+            "start_date": "2025-06-15",
+            "due_date": "2025-06-15",
+        })
+        assert r.status_code == 201
+
+    def test_create_card_dates_persist_in_get(self, client):
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        client.post(f"/lists/{lid}/cards", json={
+            "title": "T",
+            "start_date": "2025-03-01",
+            "due_date": "2025-09-30",
+        })
+        card = client.get(f"/lists/{lid}/cards").json()[0]
+        assert card["start_date"] == "2025-03-01"
+        assert card["due_date"] == "2025-09-30"
+
+    # ── PATCH description ─────────────────────────────────────────────────
+
+    def test_patch_description_returns_200(self, client):
+        _, _, card = self._setup(client)
+        r = client.patch(f"/cards/{card['id']}", json={"description": "Updated desc"})
+        assert r.status_code == 200
+
+    def test_patch_description_updates_correctly(self, client):
+        """PATCH card description → updates correctly."""
+        _, _, card = self._setup(client)
+        data = client.patch(f"/cards/{card['id']}", json={"description": "New desc"}).json()
+        assert data["description"] == "New desc"
+
+    def test_patch_description_persists_in_db(self, client, db):
+        _, _, card = self._setup(client)
+        client.patch(f"/cards/{card['id']}", json={"description": "Stored"})
+        fresh = _get_card(db, card["id"])
+        assert fresh.description == "Stored"
+
+    def test_patch_description_null_clears_it(self, client):
+        _, _, card = self._setup(client)
+        client.patch(f"/cards/{card['id']}", json={"description": "First"})
+        data = client.patch(f"/cards/{card['id']}", json={"description": None}).json()
+        assert data["description"] is None
+
+    def test_patch_description_only_counts_as_one_field(self, client):
+        """description alone is a valid single-field PATCH — not 422."""
+        _, _, card = self._setup(client)
+        r = client.patch(f"/cards/{card['id']}", json={"description": "Hello"})
+        assert r.status_code == 200
+
+    # ── PATCH due_date ────────────────────────────────────────────────────
+
+    def test_patch_due_date_sets_value(self, client):
+        _, _, card = self._setup(client)
+        data = client.patch(f"/cards/{card['id']}", json={"due_date": "2025-08-20"}).json()
+        assert data["due_date"] == "2025-08-20"
+
+    def test_patch_due_date_null_clears_it(self, client):
+        """PATCH card due_date to null → clears it."""
+        _, _, card = self._setup(client)
+        client.patch(f"/cards/{card['id']}", json={"due_date": "2025-01-01"})
+        data = client.patch(f"/cards/{card['id']}", json={"due_date": None}).json()
+        assert data["due_date"] is None
+
+    def test_patch_due_date_persists_in_db(self, client, db):
+        _, _, card = self._setup(client)
+        client.patch(f"/cards/{card['id']}", json={"due_date": "2025-07-04"})
+        fresh = _get_card(db, card["id"])
+        assert str(fresh.due_date) == "2025-07-04"
+
+    def test_patch_due_date_visible_in_get_cards(self, client):
+        _, lid, card = self._setup(client)
+        client.patch(f"/cards/{card['id']}", json={"due_date": "2025-10-10"})
+        fetched = client.get(f"/lists/{lid}/cards").json()[0]
+        assert fetched["due_date"] == "2025-10-10"
+
+    def test_patch_due_date_response_includes_all_fields(self, client):
+        _, lid, card = self._setup(client)
+        data = client.patch(
+            f"/cards/{card['id']}", json={"due_date": "2025-08-20"}
+        ).json()
+        assert data["id"] == card["id"]
+        assert data["list_id"] == lid
+        assert data["title"] == card["title"]
+        assert data["position"] == card["position"]
+        assert data["due_date"] == "2025-08-20"
+
+    # ── PATCH date-order validation ───────────────────────────────────────
+
+    def test_patch_start_date_after_due_date_422(self, client):
+        """PATCH with start_date > due_date → 422."""
+        _, _, card = self._setup(client)
+        r = client.patch(f"/cards/{card['id']}", json={
+            "start_date": "2025-12-31",
+            "due_date": "2025-01-01",
+        })
+        assert r.status_code == 422
+
+    def test_patch_start_date_equal_due_date_valid(self, client):
+        """start_date == due_date → 200 (boundary is valid)."""
+        _, _, card = self._setup(client)
+        r = client.patch(f"/cards/{card['id']}", json={
+            "start_date": "2025-06-15",
+            "due_date": "2025-06-15",
+        })
+        assert r.status_code == 200
+
+    def test_patch_start_date_only_is_valid(self, client):
+        _, _, card = self._setup(client)
+        r = client.patch(f"/cards/{card['id']}", json={"start_date": "2025-01-01"})
+        assert r.status_code == 200
+
+    # ── PATCH combined with title / list_id ───────────────────────────────
+
+    def test_patch_due_date_and_title(self, client):
+        _, _, card = self._setup(client)
+        data = client.patch(f"/cards/{card['id']}", json={
+            "title": "Updated",
+            "due_date": "2025-03-15",
+        }).json()
+        assert data["title"] == "Updated"
+        assert data["due_date"] == "2025-03-15"
+
+    def test_patch_due_date_and_list_id(self, client):
+        bid = _make_board(client)
+        l1 = _make_list(client, bid, "L1")
+        l2 = _make_list(client, bid, "L2")
+        card = _make_card(client, l1)
+        data = client.patch(f"/cards/{card['id']}", json={
+            "list_id": l2,
+            "due_date": "2025-05-05",
+        }).json()
+        assert data["list_id"] == l2
+        assert data["due_date"] == "2025-05-05"
+
+    def test_patch_all_three_new_fields(self, client):
+        _, _, card = self._setup(client)
+        data = client.patch(f"/cards/{card['id']}", json={
+            "description": "Full update",
+            "start_date": "2025-01-01",
+            "due_date": "2025-12-31",
+        }).json()
+        assert data["description"] == "Full update"
+        assert data["start_date"] == "2025-01-01"
+        assert data["due_date"] == "2025-12-31"
+
+    # ── sentinel: explicit null counts as field-present ───────────────────
+
+    def test_patch_due_date_null_explicit_is_valid(self, client):
+        """Explicitly sending due_date=null (clear) counts as one field → 200."""
+        _, _, card = self._setup(client)
+        client.patch(f"/cards/{card['id']}", json={"due_date": "2025-06-01"})
+        r = client.patch(f"/cards/{card['id']}", json={"due_date": None})
+        assert r.status_code == 200
+
+    def test_patch_description_null_explicit_is_valid(self, client):
+        """Explicitly sending description=null counts as one field → 200."""
+        _, _, card = self._setup(client)
+        client.patch(f"/cards/{card['id']}", json={"description": "X"})
+        r = client.patch(f"/cards/{card['id']}", json={"description": None})
+        assert r.status_code == 200
+
+    def test_patch_empty_body_still_422(self, client):
+        """Sending {} (no fields at all) → 422."""
+        _, _, card = self._setup(client)
+        r = client.patch(f"/cards/{card['id']}", json={})
+        assert r.status_code == 422
+
+    # ── EC3 still holds with new fields ───────────────────────────────────
+
+    def test_patch_same_list_id_with_due_date_is_noop(self, client, db):
+        """EC3: same list_id + due_date → no-op, due_date NOT written."""
+        bid = _make_board(client)
+        lid = _make_list(client, bid)
+        card = _make_card(client, lid, "Stable")
+        resp = client.patch(
+            f"/cards/{card['id']}",
+            json={"list_id": lid, "due_date": "2025-01-01"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["title"] == "Stable"
+        fresh = _get_card(db, card["id"])
+        # EC3: no write at all — due_date must still be None
+        assert fresh.due_date is None

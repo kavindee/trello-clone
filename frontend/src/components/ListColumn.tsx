@@ -1,30 +1,28 @@
 /**
- * ListColumn — full kanban column (Task 7 shell → Task 8 complete).
+ * ListColumn — full kanban column (Tasks 7 / 8 / D / Modal).
  *
- * Responsibilities:
- *   - Fetch this list's cards on mount via getCards(list.id)
- *   - Re-fetch when refreshSignal increments (triggered by a card move-in)
- *   - Render each card as a <CardItem /> (AC9 — position order preserved)
- *   - "No cards yet" empty state (EC4)
- *   - Create card form with validation (EC5, EC7) and ErrorBanner (EC8)
- *   - Delete list button → calls deleteList, then onDeleted on success (EC8)
- *   - Card callbacks: onDeleted, onMoved, onUpdated → mutate local cards state
+ * Task D additions:
+ *   - Sort toggle: sorts visible cards by due_date ASC, nulls last (local state)
+ *   - Filter cycle: All → Due soon → Overdue → All (local state)
+ *   - boardFilter prop: when set to 'due-soon' or 'overdue', overrides the
+ *     per-column filter and disables the filter button
  *
- * Props:
- *   list           — the List to render
- *   allLists       — all lists on the board (for CardItem move dropdown)
- *   onDeleted      — called after this LIST is successfully deleted
- *   refreshSignal  — increment to trigger a card re-fetch (move-in case)
- *   onCardMovedOut — called with targetListId after a card moves out
+ * Modal addition:
+ *   - "Add a card" button replaces the inline create-card form.
+ *   - Opens <CardModal mode="create" /> to collect title + description + dates.
  */
 
 import { useState, useEffect } from 'react';
-import { deleteList, getCards, createCard } from '../api';
+import { deleteList, getCards } from '../api';
 import type { ApiError } from '../api';
 import type { Card, List } from '../types';
 import CardItem from './CardItem';
+import CardModal from './CardModal';
 import ErrorBanner from './ErrorBanner';
 import styles from '../styles/ListColumn.module.css';
+
+// ── Exported type so BoardDetail can use it ────────────────────────────────
+export type FilterMode = 'all' | 'due-soon' | 'overdue';
 
 interface Props {
   list: List;
@@ -32,15 +30,55 @@ interface Props {
   onDeleted: () => void;
   refreshSignal?: number;
   onCardMovedOut?: (targetListId: number) => void;
+  /** When set to a non-'all' value, overrides per-column filter. */
+  boardFilter?: FilterMode;
 }
 
-const MAX_LEN = 255;
+// ---------------------------------------------------------------------------
+// Sort + filter logic (pure, no side-effects — operates on card due_date)
+// ---------------------------------------------------------------------------
 
-function validateTitle(value: string): string | null {
-  if (value.trim() === '') return 'Card title cannot be empty';
-  if (value.length > MAX_LEN) return 'Card title must be 255 characters or fewer';
-  return null;
+function applyFilter(cards: Card[], filter: FilterMode): Card[] {
+  if (filter === 'all') return cards;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  return cards.filter((c) => {
+    if (!c.due_date) return false;
+    const [y, m, d] = c.due_date.split('-').map(Number);
+    const dl = new Date(y, m - 1, d);
+    if (filter === 'due-soon') return dl >= today && dl <= tomorrow;
+    if (filter === 'overdue') return dl < today;
+    return true;
+  });
 }
+
+function applySort(cards: Card[], sortOn: boolean): Card[] {
+  if (!sortOn) return cards;
+  return [...cards].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;    // nulls last
+    if (!b.due_date) return -1;
+    return a.due_date.localeCompare(b.due_date); // ISO strings sort lexicographically
+  });
+}
+
+function cycleFilter(f: FilterMode): FilterMode {
+  if (f === 'all') return 'due-soon';
+  if (f === 'due-soon') return 'overdue';
+  return 'all';
+}
+
+const FILTER_LABEL: Record<FilterMode, string> = {
+  'all':      'Filter: All',
+  'due-soon': 'Filter: Due soon',
+  'overdue':  'Filter: Overdue',
+};
+
+// ---------------------------------------------------------------------------
+// ListColumn component
+// ---------------------------------------------------------------------------
 
 export default function ListColumn({
   list,
@@ -48,19 +86,27 @@ export default function ListColumn({
   onDeleted,
   refreshSignal = 0,
   onCardMovedOut,
+  boardFilter = 'all',
 }: Props) {
-  const [cards, setCards] = useState<Card[]>([]);
+  const [cards, setCards]       = useState<Card[]>([]);
   const [apiError, setApiError] = useState<ApiError | null>(null);
-  const [createInput, setCreateInput] = useState('');
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  // Sort + filter (Task D)
+  const [sortByDeadline, setSortByDeadline] = useState(false);
+  const [filterMode, setFilterMode]         = useState<FilterMode>('all');
 
-  // Fetch cards on mount and whenever refreshSignal changes (card moved in)
   useEffect(() => {
     getCards(list.id)
       .then(setCards)
       .catch((err: ApiError) => setApiError(err));
   }, [list.id, refreshSignal]);
+
+  // Board-wide filter overrides local when active
+  const effectiveFilter: FilterMode = boardFilter !== 'all' ? boardFilter : filterMode;
+  const filterDisabled = boardFilter !== 'all';
+
+  // Derive visible cards: filter first, then sort
+  const visibleCards = applySort(applyFilter(cards, effectiveFilter), sortByDeadline);
 
   // ── Delete list ───────────────────────────────────────────────────────────
   async function handleDeleteList() {
@@ -72,45 +118,26 @@ export default function ListColumn({
     }
   }
 
-  // ── Create card ───────────────────────────────────────────────────────────
-  async function handleCreateCard(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const error = validateTitle(createInput);
-    if (error !== null) {
-      setCreateError(error);
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const card = await createCard(list.id, createInput.trim());
-      setCards((prev) => [...prev, card]);
-      setCreateInput('');
-    } catch (err) {
-      setApiError(err as ApiError);
-    } finally {
-      setSubmitting(false);
-    }
+  // ── Modal callbacks ───────────────────────────────────────────────────────
+  function handleModalSuccess(card: Card) {
+    setCards((prev) => [...prev, card]);
+    setShowAddModal(false);
   }
 
-  // ── Card callbacks (from CardItem) ────────────────────────────────────────
+  // ── Card callbacks ────────────────────────────────────────────────────────
   function handleCardDeleted(cardId: number) {
     setCards((prev) => prev.filter((c) => c.id !== cardId));
   }
-
   function handleCardMoved(cardId: number, targetListId: number) {
     setCards((prev) => prev.filter((c) => c.id !== cardId));
     if (onCardMovedOut) onCardMovedOut(targetListId);
   }
-
   function handleCardUpdated(updatedCard: Card) {
     setCards((prev) => prev.map((c) => (c.id === updatedCard.id ? updatedCard : c)));
   }
 
-  const counterClass = createInput.length > MAX_LEN ? styles.counterOver : styles.counter;
-
   return (
     <li className={styles.column}>
-      {/* EC8 — error banner */}
       {apiError !== null && (
         <ErrorBanner
           status={apiError.status}
@@ -131,12 +158,36 @@ export default function ListColumn({
         </button>
       </div>
 
-      {/* Card list — EC4: "No cards yet" when empty */}
+      {/* ── Task D: Sort + Filter toolbar ─────────────────────────────────── */}
+      <div className={styles.toolbar}>
+        <button
+          className={`${styles.toolbarBtn} ${sortByDeadline ? styles.toolbarBtnActive : ''}`}
+          type="button"
+          onClick={() => setSortByDeadline((v) => !v)}
+          aria-label={sortByDeadline ? 'Sort: deadline ↑' : 'Sort by deadline'}
+          aria-pressed={sortByDeadline}
+        >
+          {sortByDeadline ? 'Sort: deadline ↑' : 'Sort by deadline'}
+        </button>
+        <button
+          className={`${styles.toolbarBtn} ${effectiveFilter !== 'all' ? styles.toolbarBtnActive : ''}`}
+          type="button"
+          onClick={() => { if (!filterDisabled) setFilterMode((f) => cycleFilter(f)); }}
+          aria-label={FILTER_LABEL[effectiveFilter]}
+          aria-pressed={effectiveFilter !== 'all'}
+          disabled={filterDisabled}
+          data-testid="column-filter-btn"
+        >
+          {FILTER_LABEL[effectiveFilter]}
+        </button>
+      </div>
+
+      {/* Card list */}
       <ul className={styles.cardArea}>
-        {cards.length === 0 ? (
+        {visibleCards.length === 0 ? (
           <p className={styles.empty}>No cards yet</p>
         ) : (
-          cards.map((card) => (
+          visibleCards.map((card) => (
             <CardItem
               key={card.id}
               card={card}
@@ -149,37 +200,26 @@ export default function ListColumn({
         )}
       </ul>
 
-      {/* Create card form */}
-      <form className={styles.createForm} onSubmit={handleCreateCard} noValidate>
-        <div className={styles.createRow}>
-          <input
-            className={styles.createInput}
-            type="text"
-            value={createInput}
-            onChange={(e) => {
-              setCreateInput(e.target.value);
-              setCreateError(null);
-            }}
-            placeholder="Card title"
-            aria-label="Card title"
-            disabled={submitting}
-          />
-          <button
-            className={styles.createButton}
-            type="submit"
-            disabled={submitting}
-            aria-label="Add card"
-          >
-            Add
-          </button>
-        </div>
-        <span className={counterClass} aria-live="polite">
-          {createInput.length}/255
-        </span>
-        {createError !== null && (
-          <span className={styles.createError}>{createError}</span>
-        )}
-      </form>
+      {/* ── "Add a card" button ────────────────────────────────────────────── */}
+      <button
+        className={styles.addCardBtn}
+        type="button"
+        onClick={() => setShowAddModal(true)}
+        aria-label="Add a card"
+      >
+        + Add a card
+      </button>
+
+      {/* ── Card creation modal ───────────────────────────────────────────── */}
+      {showAddModal && (
+        <CardModal
+          mode="create"
+          listId={list.id}
+          allLists={allLists}
+          onSuccess={handleModalSuccess}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </li>
   );
 }

@@ -16,6 +16,7 @@ import {
   getLists,
   createList,
   deleteList,
+  updateList,
   getCards,
   createCard,
   updateCard,
@@ -263,18 +264,58 @@ describe('createCard', () => {
   beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
 
   it('returns created Card on 201', async () => {
-    const card = { id: 1, list_id: 3, title: 'Task', position: 0, created_at: '' };
+    const card = {
+      id: 1, list_id: 3, title: 'Task', position: 0,
+      description: null, start_date: null, due_date: null, created_at: '',
+    };
     vi.mocked(fetch).mockResolvedValueOnce(mockResponse(201, card));
-    expect(await createCard(3, 'Task')).toEqual(card);
+    expect(await createCard(3, { title: 'Task' })).toEqual(card);
   });
 
   it('sends POST to /lists/:listId/cards', async () => {
-    const card = { id: 1, list_id: 3, title: 'T', position: 0, created_at: '' };
+    const card = {
+      id: 1, list_id: 3, title: 'T', position: 0,
+      description: null, start_date: null, due_date: null, created_at: '',
+    };
     vi.mocked(fetch).mockResolvedValueOnce(mockResponse(201, card));
-    await createCard(3, 'T');
+    await createCard(3, { title: 'T' });
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       'http://localhost:8000/lists/3/cards',
       expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('sends POST body with title only', async () => {
+    const card = {
+      id: 1, list_id: 3, title: 'T', position: 0,
+      description: null, start_date: null, due_date: null, created_at: '',
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(201, card));
+    await createCard(3, { title: 'T' });
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      'http://localhost:8000/lists/3/cards',
+      expect.objectContaining({ body: JSON.stringify({ title: 'T' }) }),
+    );
+  });
+
+  it('sends POST body with all fields', async () => {
+    const card = {
+      id: 1, list_id: 3, title: 'T', position: 0,
+      description: 'desc', start_date: '2025-01-01', due_date: '2025-12-31', created_at: '',
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(201, card));
+    await createCard(3, {
+      title: 'T', description: 'desc',
+      start_date: '2025-01-01', due_date: '2025-12-31',
+    });
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      'http://localhost:8000/lists/3/cards',
+      expect.objectContaining({
+        body: JSON.stringify({
+          title: 'T', description: 'desc',
+          start_date: '2025-01-01', due_date: '2025-12-31',
+        }),
+      }),
     );
   });
 });
@@ -340,5 +381,55 @@ describe('deleteCard', () => {
       'http://localhost:8000/cards/4',
       expect.objectContaining({ method: 'DELETE' }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateList — Task C
+// ---------------------------------------------------------------------------
+
+describe('updateList', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+
+  it('sends PATCH to /lists/:id', async () => {
+    const list = { id: 3, board_id: 1, name: 'Todo', position: 0, deadline: null, created_at: '' };
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, list));
+    await updateList(3, { deadline: null });
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      'http://localhost:8000/lists/3',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  it('returns updated List on 200', async () => {
+    const list = { id: 3, board_id: 1, name: 'Done', position: 0, deadline: '2025-12-31', created_at: '' };
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, list));
+    const result = await updateList(3, { deadline: '2025-12-31' });
+    expect(result.deadline).toBe('2025-12-31');
+  });
+
+  it('sends deadline: null to clear', async () => {
+    const list = { id: 3, board_id: 1, name: 'Todo', position: 0, deadline: null, created_at: '' };
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, list));
+    await updateList(3, { deadline: null });
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      'http://localhost:8000/lists/3',
+      expect.objectContaining({ body: JSON.stringify({ deadline: null }) }),
+    );
+  });
+
+  it('sends name update', async () => {
+    const list = { id: 3, board_id: 1, name: 'New Name', position: 0, deadline: null, created_at: '' };
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, list));
+    await updateList(3, { name: 'New Name' });
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      'http://localhost:8000/lists/3',
+      expect.objectContaining({ body: JSON.stringify({ name: 'New Name' }) }),
+    );
+  });
+
+  it('throws ApiError on 404', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(404, { detail: 'List not found' }));
+    await expect(updateList(99, { deadline: null })).rejects.toMatchObject({ status: 404 });
   });
 });

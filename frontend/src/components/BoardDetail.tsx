@@ -17,7 +17,7 @@ import { useState, useEffect } from 'react';
 import { getBoard, getLists, createList } from '../api';
 import type { ApiError } from '../api';
 import type { Board, List } from '../types';
-import ListColumn from './ListColumn';
+import ListColumn, { type FilterMode } from './ListColumn';
 import ErrorBanner from './ErrorBanner';
 import styles from '../styles/BoardDetail.module.css';
 
@@ -44,6 +44,8 @@ export default function BoardDetail({ id }: Props) {
   const [submitting, setSubmitting] = useState(false);
   // refreshSignals: keyed by list.id; incrementing tells that ListColumn to re-fetch cards
   const [listRefreshSignals, setListRefreshSignals] = useState<Record<number, number>>({});
+  // Task D — board-wide filter (overrides per-column when != 'all')
+  const [boardFilter, setBoardFilter] = useState<FilterMode>('all');
 
   // AC4 — fetch board + lists in parallel
   useEffect(() => {
@@ -128,6 +130,24 @@ export default function BoardDetail({ id }: Props) {
         )}
       </div>
 
+      {/* Task D — board-wide filter bar */}
+      {board !== null && (
+        <div className={styles.filterBar}>
+          {(['all', 'due-soon', 'overdue'] as FilterMode[]).map((f) => (
+            <button
+              key={f}
+              className={`${styles.filterBarBtn} ${boardFilter === f ? styles.filterBarBtnActive : ''}`}
+              onClick={() => setBoardFilter(f)}
+              aria-label={`Board filter: ${f === 'all' ? 'All' : f === 'due-soon' ? 'Due soon' : 'Overdue'}`}
+              aria-pressed={boardFilter === f}
+              type="button"
+            >
+              {f === 'all' ? 'All' : f === 'due-soon' ? 'Due soon' : 'Overdue'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* EC8 — error banners (load error + create/mutation errors) */}
       <div className={styles.notifications}>
         {loadError !== null && (
@@ -160,6 +180,7 @@ export default function BoardDetail({ id }: Props) {
                 onDeleted={() => handleListDeleted(list.id)}
                 refreshSignal={listRefreshSignals[list.id] ?? 0}
                 onCardMovedOut={handleCardMovedOut}
+                boardFilter={boardFilter}
               />
             ))}
           </ul>

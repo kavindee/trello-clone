@@ -1,8 +1,9 @@
 """ORM models: Board, List, Card — matching the PLAN.md schema exactly."""
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -32,6 +33,7 @@ class List(Base):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    deadline: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
@@ -51,6 +53,9 @@ class Card(Base):
     )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )

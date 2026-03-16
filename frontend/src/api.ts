@@ -145,6 +145,24 @@ export async function createList(boardId: number, name: string): Promise<List> {
   return resp.json() as Promise<List>;
 }
 
+/**
+ * PATCH /lists/:id — updates a list's name and/or deadline.
+ * At least one field must be present (backend returns 422 otherwise).
+ * deadline=null clears a previously set deadline.
+ */
+export async function updateList(
+  id: number,
+  patch: { name?: string; deadline?: string | null },
+): Promise<List> {
+  const resp = await fetch(`${API_BASE}/lists/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  await requireOk(resp);
+  return resp.json() as Promise<List>;
+}
+
 /** DELETE /lists/:id — deletes the list and all its cards (204). */
 export async function deleteList(id: number): Promise<void> {
   const resp = await fetch(`${API_BASE}/lists/${id}`, { method: 'DELETE' });
@@ -163,26 +181,40 @@ export async function getCards(listId: number): Promise<Card[]> {
 }
 
 /** POST /lists/:listId/cards — creates a card; returns the created Card (201). */
-export async function createCard(listId: number, title: string): Promise<Card> {
+export async function createCard(
+  listId: number,
+  payload: {
+    title: string;
+    description?: string | null;
+    start_date?: string | null;
+    due_date?: string | null;
+  },
+): Promise<Card> {
   const resp = await fetch(`${API_BASE}/lists/${listId}/cards`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify(payload),
   });
   await requireOk(resp);
   return resp.json() as Promise<Card>;
 }
 
 /**
- * PATCH /cards/:id — updates a card's title and/or moves it to another list.
+ * PATCH /cards/:id — updates a card's fields and/or moves it to another list.
  *
- * At least one of `title` / `list_id` must be present; the backend returns
- * 422 otherwise.  EC3: if `list_id` equals the card's current list the
- * backend returns the unchanged card as a no-op.
+ * At least one field must be present; the backend returns 422 otherwise.
+ * EC3: if `list_id` equals the card's current list the backend returns the
+ * unchanged card as a no-op.
  */
 export async function updateCard(
   id: number,
-  patch: { title?: string; list_id?: number },
+  patch: {
+    title?: string;
+    list_id?: number;
+    description?: string | null;
+    start_date?: string | null;
+    due_date?: string | null;
+  },
 ): Promise<Card> {
   const resp = await fetch(`${API_BASE}/cards/${id}`, {
     method: 'PATCH',

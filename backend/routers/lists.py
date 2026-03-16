@@ -151,6 +151,43 @@ def create_list(
     return lst
 
 
+@router.patch("/lists/{list_id}", response_model=schemas.ListResponse)
+def patch_list(
+    list_id: int,
+    payload: schemas.ListPatch,
+    db: Session = Depends(get_db),
+):
+    """Update a list's name and/or deadline atomically.
+
+    At least one of name / deadline must be provided (else 422).
+    Sending deadline=null explicitly clears a previously-set deadline.
+    Returns 404 if the list does not exist.
+    """
+    name_set = payload.name is not None
+    deadline_set = "deadline" in payload.model_fields_set
+
+    if not name_set and not deadline_set:
+        raise HTTPException(
+            status_code=422,
+            detail="At least one of 'name' or 'deadline' must be provided.",
+        )
+
+    lst = db.get(models.List, list_id)
+    if lst is None:
+        raise HTTPException(
+            status_code=404, detail=f"List {list_id} not found"
+        )
+
+    if name_set:
+        lst.name = payload.name  # type: ignore[assignment]
+    if deadline_set:
+        lst.deadline = payload.deadline  # None clears; date sets
+
+    db.commit()
+    db.refresh(lst)
+    return lst
+
+
 @router.delete("/lists/{list_id}", status_code=204)
 def delete_list(list_id: int, db: Session = Depends(get_db)):
     """Delete a list and all its cards atomically (AC7, EC2, AC16).

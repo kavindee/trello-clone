@@ -6,6 +6,387 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Card creation modal + types update (Frontend) (2026-03-16)
+
+**Changed**
+- `frontend/src/types.ts` — `Card` interface: removed `deadline`, added
+  `description: string | null`, `start_date: string | null`,
+  `due_date: string | null`. `List.deadline` unchanged.
+- `frontend/src/api.ts`:
+  - `createCard(listId, payload)` — payload is now an object
+    `{ title, description?, start_date?, due_date? }` instead of a bare string.
+  - `updateCard` patch type: removed `deadline?`, added `description?`,
+    `start_date?`, `due_date?` (all `string | null`).
+- `frontend/src/components/ListColumn.tsx`:
+  - Replaced inline create-card `<form>` with an **"Add a card" button**.
+  - Clicking the button opens `<CardModal mode="create" />`.
+  - `handleModalSuccess(card)` appends the new card and closes the modal.
+  - `applyFilter` / `applySort` updated to use `c.due_date` instead of
+    `c.deadline` for sort/filter logic.
+  - Removed: `createCard` import, `createInput`/`createError`/`submitting`
+    state, `handleCreateCard`, `validateCardTitle`, `MAX_LEN`, inline form JSX.
+- `frontend/src/components/CardItem.tsx` (minimal compile fix):
+  - Removed `DatePicker` import and CSS import.
+  - Removed `parseDateStr`, `formatDateToISO`, `getDeadlineStatus`,
+    `DeadlineStatus`, `DeadlineBadge` — no longer needed after `deadline`
+    removal from `Card`.
+  - `editDeadline` / `displayDeadline` state removed; `handleSave` patch no
+    longer includes `deadline`. Full `description`/`start_date`/`due_date`
+    support will be added in the next prompt via `CardModal`.
+
+**Added**
+- `frontend/src/components/CardModal.tsx` — new modal overlay component:
+  - **Create mode**: title (required, ≤255 chars), description (optional,
+    ≤1000 chars), start/due date pickers. Calls `createCard(listId, payload)`.
+  - **Edit mode**: pre-fills all fields from `card` prop; sends only changed
+    fields via `updateCard`; includes move-to-list dropdown.
+  - Date validation: `start_date > due_date` → inline "Start date must be
+    before due date" error, blocks submission.
+  - Closes on: Cancel button | backdrop click | Escape key.
+  - Stays open + shows `ErrorBanner` on API failure.
+  - `data-testid="card-modal-backdrop"` / `"card-modal-box"` for test targeting.
+- `frontend/src/styles/CardModal.module.css` — backdrop, centered dialog,
+  field labels, title input, description textarea, two-column date row,
+  footer with Cancel / Submit buttons.
+- `frontend/src/styles/ListColumn.module.css` — `.addCardBtn` dashed-border
+  button style.
+
+**Tests**
+- `frontend/src/test/CardModal.test.tsx` (NEW — 29 tests):
+  renders, title/description/date validation, create success/failure,
+  close behaviours (Cancel / backdrop / Escape), edit mode pre-fill + save.
+  React-datepicker mocked as a plain `<input>` for test simplicity.
+- `frontend/src/test/ListColumn.test.tsx` — fully rewritten:
+  - Mock cards use `description`/`start_date`/`due_date` (not `deadline`).
+  - `sortCards` / `filterCards` use `due_date`.
+  - Old "create card form" tests removed; replaced by 6 new modal tests:
+    button renders, click opens modal, `onSuccess` appends card + closes modal,
+    `onClose` dismisses modal without adding card.
+  - `CardModal` mocked with a minimal stub.
+- `frontend/src/test/CardItem.test.tsx` — rewritten:
+  - Mock card uses new fields; deadline badge/editor describe blocks removed
+    (feature retired from `CardItem` in this step).
+  - All 14 remaining tests (display, delete, move, edit-title) pass.
+- `frontend/src/test/api.test.ts` — `createCard` describe block updated
+  for new payload signature; 2 new tests (body with title only, body with
+  all fields).
+- `frontend/src/test/types.test.ts` — `Card` describe updated to test
+  `due_date`, `description`, `start_date` instead of `deadline`.
+- `frontend/src/test/BoardDetail.test.tsx` — `CardModal` mocked; card
+  fixtures in Task D tests updated to use `due_date`.
+
+**Verified**
+- `npm test` → **208 / 208 passed** (9 files), 0 failures
+- `npm run build` → TypeScript clean, 0 errors, 385 kB JS
+- "Add a card" button opens modal ✓
+- Modal title-only submit → card created, modal closes ✓
+- Modal `start_date > due_date` → inline error, no API call ✓
+- Escape key and backdrop click close the modal ✓
+- Failed API call → ErrorBanner inside modal, stays open ✓
+- No backend files modified ✓
+
+### Card fields — description, start_date, due_date (Backend) (2026-03-16)
+
+**Changed**
+- `backend/models.py` — `Card.deadline` replaced with three nullable columns:
+  `description TEXT`, `start_date DATE`, `due_date DATE`.
+  `List.deadline` is unchanged.
+- `backend/schemas.py` — Added `model_validator` import.
+  - `CardCreate`: added `description`, `start_date`, `due_date` optional fields;
+    `model_validator(mode="after")` raises 422 when `start_date > due_date`.
+  - `CardPatch`: removed `deadline`, added `description`, `start_date`,
+    `due_date` with sentinel pattern (`model_fields_set` distinguishes
+    "not provided" from "explicitly null"); same date-order validation.
+    "At least one field" guard updated to cover all five patchable fields.
+  - `CardResponse`: replaced `deadline` with `description`, `start_date`,
+    `due_date`.
+- `backend/routers/cards.py` — `create_card` passes new fields to `models.Card()`.
+  `patch_card` uses `description_set`, `start_date_set`, `due_date_set`
+  sentinels; EC3 no-op still prevents any write when `list_id == card.list_id`.
+- `backend/main.py` — Migrations block updated: removed
+  `ALTER TABLE cards ADD COLUMN deadline DATE`; added
+  `ALTER TABLE cards ADD COLUMN description TEXT`,
+  `ALTER TABLE cards ADD COLUMN start_date DATE`,
+  `ALTER TABLE cards ADD COLUMN due_date DATE`.
+  `ALTER TABLE lists ADD COLUMN deadline DATE` is retained unchanged.
+
+**Added (tests)**
+- `backend/tests/test_cards.py` — `TestCardDeadline` removed; replaced by
+  `TestCardNewFields` (30 tests) covering all required cases:
+  create with description, create with dates, start_date > due_date → 422,
+  only start_date → 201, PATCH description, PATCH due_date null clears,
+  PATCH start_date > due_date → 422, sentinel explicit-null, EC3 with due_date.
+- `backend/tests/test_smoke.py` — `test_card_columns` updated to expect
+  `description`, `start_date`, `due_date` instead of `deadline`.
+- `backend/tests/test_lists.py` — Two card-response tests updated:
+  `test_get_cards_response_includes_deadline_field` →
+  `test_get_cards_response_includes_due_date_field`;
+  `test_get_cards_new_card_deadline_is_null` →
+  `test_get_cards_new_card_due_date_is_null`.
+
+**Verified**
+- `pytest backend/tests/` → **204 passed**, 0 failures
+- POST with description + dates → 201, all fields in response ✓
+- POST with start_date > due_date → 422 ✓
+- PATCH with start_date > due_date → 422 ✓
+- PATCH due_date=null clears the field ✓
+- GET /lists/{id}/cards returns description, start_date, due_date ✓
+- List deadline column untouched ✓
+- No frontend files modified ✓
+
+### Task D — Sort and Filter by Deadline (Frontend) (2026-03-16)
+
+**Changed**
+- `frontend/src/components/ListColumn.tsx`:
+  - Exported `FilterMode = 'all' | 'due-soon' | 'overdue'` type
+  - New prop `boardFilter?: FilterMode` (defaults `'all'`; when `!= 'all'`
+    it overrides the per-column filter and disables the filter button)
+  - New state: `sortByDeadline: boolean`, `filterMode: FilterMode`
+  - `applyFilter(cards, filter)` — pure function; 'due-soon' = today or
+    tomorrow (local-time comparison); 'overdue' = deadline < today
+  - `applySort(cards, sortOn)` — pure function; ISO strings sort
+    lexicographically; nulls last
+  - `cycleFilter(f)` — 3-way cycle: all → due-soon → overdue → all
+  - Toolbar rendered between header and deadline badge:
+    - **Sort toggle** — `aria-pressed`, label "Sort by deadline" / "Sort:
+      deadline ↑"; no API call, no position change
+    - **Filter cycle button** — `aria-label=FILTER_LABEL[effectiveFilter]`,
+      `disabled` when `boardFilter` is active,
+      `data-testid="column-filter-btn"` for unambiguous test selection
+  - `visibleCards = applySort(applyFilter(cards, effectiveFilter), sortOn)`
+    replaces raw `cards` in the render
+- `frontend/src/components/BoardDetail.tsx`:
+  - New state: `boardFilter: FilterMode` (default `'all'`)
+  - Imports `FilterMode` from `ListColumn`
+  - Board-wide filter bar rendered below topBar (only when board loaded):
+    3 pill buttons "All" / "Due soon" / "Overdue";
+    `aria-label="Board filter: {label}"` for unambiguous selection;
+    `aria-pressed` reflects active state
+  - `boardFilter` passed to each `ListColumn`
+- `frontend/src/styles/ListColumn.module.css` — added `.toolbar`,
+  `.toolbarBtn`, `.toolbarBtnActive` (indigo when active, disabled opacity)
+- `frontend/src/styles/BoardDetail.module.css` — added `.filterBar`,
+  `.filterBarBtn`, `.filterBarBtnActive` (indigo pill buttons)
+
+**Added (tests — TDD)**
+- `frontend/src/test/ListColumn.test.tsx` — 11 new tests (2 describe blocks):
+  - "sort by deadline" (4): default position order, sort ASC nulls-last,
+    active label, toggle off restores order
+  - "filter cards" (7): All shows all, Due-soon shows today-only card,
+    Overdue shows past card, cycle All→DS→OV→All, boardFilter prop
+    overrides local filter, boardFilter disables filter button
+
+  **Key design**: no fake timers; `'2020-01-01'` always overdue,
+  `todayISO` computed at module load for 'soon', `'2099-12-31'` always
+  future; sort tests use ISO lexicographic ordering which is date-independent
+- `frontend/src/test/BoardDetail.test.tsx` — 5 new tests in
+  "BoardDetail — board-wide filter":
+  - Filter bar buttons present; Overdue hides future cards; Overdue
+    disables per-column filter button (`getByTestId('column-filter-btn')`);
+    All re-enables it; All restores all cards
+
+**Lessons learned (recorded in AGENTS.md)**
+- `vi.useFakeTimers()` in `beforeEach` + `screen.findByText/findByRole`
+  = infinite hang: `waitFor` polls via `setTimeout` which is frozen.
+  Use absolute dates (`'2020-01-01'` / `'2099-12-31'`) and dynamic
+  `todayISO` instead of freezing the clock for deadline UI tests.
+- Multiple elements with same aria-label prefix: use `data-testid` or
+  distinct prefixes ("Board filter: X" vs "Filter: X") to disambiguate.
+
+**Verified**
+- `npm test` → **199 passed** (8 files), 0 failures
+- `npm run build` → TypeScript clean + Vite 385 kB JS, 0 errors
+- Sort toggle reorders by deadline ASC, nulls last ✓
+- Filter "Due soon" hides overdue + future + null ✓
+- Filter "Overdue" hides due-soon + future + null ✓
+- Board-wide Overdue filter disables per-column filter button ✓
+- Board-wide All re-enables per-column controls ✓
+
+---
+
+### Task C — List Deadline Badge + Inline Editor (Frontend) (2026-03-16)
+
+**Changed**
+- `frontend/src/types.ts` — `List.deadline: string | null` added (ISO
+  "YYYY-MM-DD" or null).
+- `frontend/src/api.ts` — `updateList(id, patch)` added: `PATCH /lists/:id`
+  with `{ name?: string; deadline?: string | null }`.
+- `frontend/src/components/ListColumn.tsx` — deadline support:
+  - `displayDeadline` state (from `list.deadline`; updated from API response
+    body after save — same AC10 pattern used on cards)
+  - `editDeadline` state (seeded from `displayDeadline` on open)
+  - `getListDeadlineStatus` / `parseDateStr` / `formatDateToISO` helpers
+    (local copies; same logic as CardItem helpers)
+  - `ListDeadlineBadge` sub-component renders `data-testid="list-deadline-{status}"`
+    span below the header row
+  - Header: `📅` "Edit list deadline" button added alongside Delete
+  - Inline deadline editor panel (below header, shown when `editingDeadline`):
+    `react-datepicker` + Clear + Save + Cancel buttons; Save calls
+    `updateList({ deadline: editDeadline })`; failure shows ErrorBanner and
+    leaves `displayDeadline` unchanged (EC8 pattern)
+- `frontend/src/styles/ListColumn.module.css` — added `.deadlineBadgeRow`,
+  `.deadlineBadge` base, `.deadlineOverdue`, `.deadlineSoon`, `.deadlineFuture`
+  pills; `.editDeadlineBtn`, `.deadlineEditor`, `.deadlinePickerRow`,
+  `.deadlinePickerWrap` (react-datepicker overrides), `.clearDeadlineBtn`,
+  `.deadlineEditorBtns`, `.saveDeadlineBtn`, `.cancelDeadlineBtn`
+
+**Changed (tests — type ripple from `List.deadline` now required)**
+- `frontend/src/test/CardItem.test.tsx` — `mockAllLists` items updated with
+  `deadline: null`
+- `frontend/src/test/ListColumn.test.tsx` — `mockList` + `mockAllLists` updated
+  with `deadline: null`; `afterEach` added to vitest imports
+- `frontend/src/test/BoardDetail.test.tsx` — `mockLists`, `newList` objects,
+  and `xssList` updated with `deadline: null`
+- `frontend/src/test/types.test.ts` — List objects updated with `deadline: null`;
+  2 new List deadline tests added
+- `frontend/src/test/BoardDetail.test.tsx` — "removes column after successful
+  delete" test updated to use `aria-label` selector (avoids accidentally
+  clicking the new `📅` button instead of Delete)
+
+**Added (tests — TDD, written before implementation)**
+- `frontend/src/test/ListColumn.test.tsx` — 12 new tests:
+  - "list deadline badge" (5): no badge when null, red/yellow/grey for
+    yesterday/today/future; uses `vi.useFakeTimers()` in `beforeEach`/
+    `afterEach`
+  - "deadline editor" (7): Edit button present, clicking opens editor,
+    Cancel closes without API call, Clear+Save sends `deadline: null`,
+    Save sends current deadline, failed Save shows ErrorBanner + badge
+    unchanged (uses `'2099-06-22'` to avoid fake-timer leak), successful
+    Save updates deadline from API response body (uses `'2099-12-31'`)
+- `frontend/src/test/api.test.ts` — 5 new tests for `updateList`:
+  PATCH URL, returns updated list, sends `deadline: null`, sends name,
+  throws ApiError on 404
+
+**Verified**
+- `npm test` → **184 passed** (8 files), 0 failures
+- `npm run build` → TypeScript clean + Vite 383 kB JS, 0 errors
+- List header shows correct badge (overdue/soon/future/none) ✓
+- `📅` button opens inline deadline editor ✓
+- Clear + Save → `updateList({ deadline: null })` called ✓
+- Failed save → ErrorBanner, badge unchanged (EC8) ✓
+- Successful save → badge updated from API response body ✓
+
+---
+
+### Task B — Deadline Badge + Date Picker (Frontend) (2026-03-16)
+
+**Installed**
+- `react-datepicker` + `@types/react-datepicker`
+
+**Changed**
+- `frontend/src/types.ts` — `Card.deadline: string | null` added (ISO
+  "YYYY-MM-DD" or null); `List` interface unchanged (backend returns it,
+  frontend ignores it for now).
+- `frontend/src/api.ts` — `updateCard` patch type extended with
+  `deadline?: string | null` (null = clear the deadline).
+- `frontend/src/components/CardItem.tsx` — full deadline support:
+  - `displayDeadline` state (mirrors AC10 pattern — set only from API
+    response body, not from local input)
+  - `editDeadline` state (initialised from `displayDeadline` in `startEdit`)
+  - `getDeadlineStatus(deadline)` pure function → `'overdue' | 'soon' |
+    'future' | null`; uses local-time `new Date(y, m-1, d)` to avoid UTC
+    offset shifting the day
+  - `DeadlineBadge` sub-component renders `data-testid="deadline-{status}"`
+    span with the appropriate CSS class; renders nothing when deadline is null
+  - `parseDateStr` / `formatDateToISO` helpers for react-datepicker ↔ ISO
+    string conversion
+  - Edit mode: `react-datepicker` input + "Clear" button
+    (`aria-label="Clear deadline"`)
+  - `handleSave`: deadline only included in PATCH when it differs from
+    `displayDeadline` (avoids unnecessary writes); `displayDeadline` updated
+    from API response body after save
+- `frontend/src/styles/CardItem.module.css` — added `.deadlineOverdue`
+  (red pill), `.deadlineSoon` (yellow pill), `.deadlineFuture` (grey pill),
+  `.deadlineRow`, `.datepickerWrapper` (overrides react-datepicker input
+  to match card style), `.clearDeadlineBtn`, `.deadlineLabel`
+
+**Changed (tests — type ripple from `Card.deadline` now required)**
+- `frontend/src/test/types.test.ts` — Card objects updated with
+  `deadline: null`; added 2 new tests (accepts ISO string, accepts null)
+- `frontend/src/test/CardItem.test.tsx` — `mockCard` updated with
+  `deadline: null as string | null`; all `mockResolvedValue` card spreads
+  carry the field
+- `frontend/src/test/ListColumn.test.tsx` — `mockCards` elements +
+  `createCard`/`updateCard` mock return objects updated with `deadline: null`
+
+**Added (tests — TDD, written before implementation)**
+- `frontend/src/test/CardItem.test.tsx` — 12 new tests in two describe
+  blocks:
+  - "deadline badge (display mode)" (6): no badge when null, red badge for
+    yesterday, yellow badge for today, yellow badge for tomorrow, grey badge
+    for 7 days out, badge shows date text; uses `vi.useFakeTimers()` +
+    `vi.setSystemTime()` within `beforeEach`/`afterEach`
+  - "deadline in edit mode" (6): Clear button present in edit mode (with
+    and without deadline), Clear→Save sends `deadline: null` in patch,
+    deadline NOT in patch when unchanged (null→null), deadline from API
+    response body (AC10 pattern — uses `'2099-12-31'` so no fake timers
+    needed), no badge after save when API returns null
+
+**Verified**
+- `npm test` → **165 passed** (8 files), 0 failures
+- `npm run build` → TypeScript clean + Vite 380 kB JS, 0 errors
+- Card with past deadline shows red `deadline-overdue` badge ✓
+- Card with deadline today/tomorrow shows yellow `deadline-soon` badge ✓
+- Card with far-future deadline shows grey `deadline-future` badge ✓
+- Card with no deadline shows no badge ✓
+- Clear button in edit mode → PATCH includes `deadline: null` ✓
+- Deadline from API response used (not local state) — AC10 pattern ✓
+- Unchanged deadline (null→null) not included in PATCH body ✓
+
+---
+
+### Task A — Deadline Support (Backend) (2026-03-16)
+
+**Added**
+- `backend/models.py` — nullable `deadline DATE` column on both `List` and
+  `Card` ORM models (`Mapped[Optional[date]]`, `Date`, `nullable=True`).
+- `backend/schemas.py` — `ListPatch` schema: `name: Optional[str]` +
+  `deadline: Optional[date]`; at least one required (enforced in router via
+  `model_fields_set`); name validated with existing whitespace/newline rules.
+- `backend/routers/lists.py` — `PATCH /lists/{list_id}` endpoint: updates
+  name and/or deadline atomically; `deadline=null` (explicit) clears value;
+  uses `model_fields_set` sentinel to distinguish "not sent" from "send null";
+  404 if list missing; 422 if neither field provided.
+- `backend/main.py` — idempotent ALTER TABLE routine runs after `create_all`:
+  issues `ALTER TABLE lists ADD COLUMN deadline DATE` and
+  `ALTER TABLE cards ADD COLUMN deadline DATE`; each wrapped in `try/except`
+  that silently ignores `OperationalError` (column already exists).
+
+**Changed**
+- `backend/schemas.py` — `ListResponse` gains `deadline: Optional[date]`;
+  `CardResponse` gains `deadline: Optional[date]`; `CardPatch` gains
+  `deadline: Optional[date]` (sentinel via `model_fields_set`).
+- `backend/routers/cards.py` — `PATCH /cards/{id}`: extended "at least one
+  field" guard to include `deadline` (via `model_fields_set`); `deadline`
+  applied after move logic; EC3 same-list no-op still suppresses all writes
+  including deadline; both `deadline` and the existing fields applied in one
+  `db.commit()`.
+- `backend/tests/test_smoke.py` — updated `test_list_columns` and
+  `test_card_columns` to include `"deadline"` in the expected column sets.
+
+**Added (tests — TDD, written before implementation)**
+- `backend/tests/test_lists.py` — `TestPatchList` (16 tests): name-only,
+  deadline-only, both, clear-deadline, DB persistence, 422 (no fields),
+  422 (null name only), 404, response schema, whitespace name rejected.
+  `TestDeadlineInGetEndpoints` (5 tests): `deadline` field in
+  `GET /boards/{id}/lists` and `GET /lists/{id}/cards` responses.
+- `backend/tests/test_cards.py` — `TestCardDeadline` (16 tests): `deadline`
+  in GET response, set/clear deadline, DB persistence, combined with
+  title/list_id, deadline-only counts as valid patch, EC3 suppresses deadline
+  write, `{}` still 422.
+
+**Verified**
+- `pytest backend/tests/` → **190 passed**, 0 failures, 0 errors
+- `GET /boards/{id}/lists` → each list includes `deadline` field ✓
+- `GET /lists/{id}/cards` → each card includes `deadline` field ✓
+- `PATCH /lists/{id}` → name-only, deadline-only, both, clear ✓
+- `PATCH /cards/{id}` with `deadline: null` → clears value ✓
+- EC3 no-op: same `list_id` + `deadline` → no write, deadline stays null ✓
+- `{}` PATCH → 422 (at least one field still required) ✓
+- ALTER TABLE idempotent → re-runs without error ✓
+
+---
+
 ### Task 9 — README + Smoke Test (2026-03-16)
 
 **Added**

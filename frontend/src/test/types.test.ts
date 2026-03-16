@@ -38,6 +38,7 @@ describe('List interface', () => {
       board_id: 1,
       name: 'To Do',
       position: 0,
+      deadline: null,
       created_at: '2025-01-02T00:00:00Z',
     };
     expect(list.board_id).toBe(1);
@@ -45,8 +46,18 @@ describe('List interface', () => {
   });
 
   it('exposes position as number', () => {
-    const list: List = { id: 1, board_id: 1, name: 'L', position: 3, created_at: '' };
+    const list: List = { id: 1, board_id: 1, name: 'L', position: 3, deadline: null, created_at: '' };
     expect(typeof list.position).toBe('number');
+  });
+
+  it('accepts deadline as ISO date string', () => {
+    const list: List = { id: 4, board_id: 1, name: 'L', position: 0, deadline: '2025-12-31', created_at: '' };
+    expect(list.deadline).toBe('2025-12-31');
+  });
+
+  it('accepts deadline as null', () => {
+    const list: List = { id: 5, board_id: 1, name: 'L', position: 0, deadline: null, created_at: '' };
+    expect(list.deadline).toBeNull();
   });
 });
 
@@ -57,6 +68,9 @@ describe('Card interface', () => {
       list_id: 2,
       title: 'Fix bug',
       position: 1,
+      description: null,
+      start_date: null,
+      due_date: null,
       created_at: '2025-01-03T00:00:00Z',
     };
     expect(card.list_id).toBe(2);
@@ -64,7 +78,42 @@ describe('Card interface', () => {
   });
 
   it('exposes title as string', () => {
-    const card: Card = { id: 1, list_id: 1, title: 'hello', position: 0, created_at: '' };
+    const card: Card = {
+      id: 1, list_id: 1, title: 'hello', position: 0,
+      description: null, start_date: null, due_date: null, created_at: '',
+    };
     expect(typeof card.title).toBe('string');
+  });
+
+  it('accepts due_date as ISO date string', () => {
+    const card: Card = {
+      id: 2, list_id: 1, title: 'X', position: 0,
+      description: null, start_date: null, due_date: '2025-12-31', created_at: '',
+    };
+    expect(card.due_date).toBe('2025-12-31');
+  });
+
+  it('accepts due_date as null', () => {
+    const card: Card = {
+      id: 3, list_id: 1, title: 'Y', position: 0,
+      description: null, start_date: null, due_date: null, created_at: '',
+    };
+    expect(card.due_date).toBeNull();
+  });
+
+  it('accepts description as string', () => {
+    const card: Card = {
+      id: 4, list_id: 1, title: 'Z', position: 0,
+      description: 'Some description', start_date: null, due_date: null, created_at: '',
+    };
+    expect(card.description).toBe('Some description');
+  });
+
+  it('accepts start_date as ISO date string', () => {
+    const card: Card = {
+      id: 5, list_id: 1, title: 'A', position: 0,
+      description: null, start_date: '2025-01-01', due_date: '2025-12-31', created_at: '',
+    };
+    expect(card.start_date).toBe('2025-01-01');
   });
 });
