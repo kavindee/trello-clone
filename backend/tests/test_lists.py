@@ -324,3 +324,95 @@ class TestListCreateValidation:
             client.post(f"/boards/{board_id}/lists", json={"name": None}).status_code
             == 422
         )
+
+
+# ---------------------------------------------------------------------------
+# GET /lists/{id}/cards — spec gap fix: allows frontend to fetch cards per list
+# ---------------------------------------------------------------------------
+
+
+def _create_card(client, list_id: int, title: str = "Test Card") -> dict:
+    resp = client.post(f"/lists/{list_id}/cards", json={"title": title})
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def test_get_cards_returns_200(client):
+    board_id = _create_board(client)
+    lst = _create_list(client, board_id)
+    resp = client.get(f"/lists/{lst['id']}/cards")
+    assert resp.status_code == 200
+
+
+def test_get_cards_empty_when_no_cards(client):
+    board_id = _create_board(client)
+    lst = _create_list(client, board_id)
+    assert client.get(f"/lists/{lst['id']}/cards").json() == []
+
+
+def test_get_cards_returns_created_cards(client):
+    board_id = _create_board(client)
+    lst = _create_list(client, board_id)
+    _create_card(client, lst["id"], "Alpha")
+    _create_card(client, lst["id"], "Beta")
+    cards = client.get(f"/lists/{lst['id']}/cards").json()
+    titles = [c["title"] for c in cards]
+    assert "Alpha" in titles
+    assert "Beta" in titles
+
+
+def test_get_cards_ordered_by_position_asc(client):
+    """Cards must be returned in creation (position ASC) order (AC9)."""
+    board_id = _create_board(client)
+    lst = _create_list(client, board_id)
+    for title in ("First", "Second", "Third"):
+        _create_card(client, lst["id"], title)
+    cards = client.get(f"/lists/{lst['id']}/cards").json()
+    assert [c["title"] for c in cards] == ["First", "Second", "Third"]
+    assert [c["position"] for c in cards] == [0, 1, 2]
+
+
+def test_get_cards_response_schema(client):
+    board_id = _create_board(client)
+    lst = _create_list(client, board_id)
+    _create_card(client, lst["id"], "My Card")
+    card = client.get(f"/lists/{lst['id']}/cards").json()[0]
+    assert isinstance(card["id"], int)
+    assert card["list_id"] == lst["id"]
+    assert card["title"] == "My Card"
+    assert isinstance(card["position"], int)
+    assert "created_at" in card
+
+
+def test_get_cards_isolates_lists(client):
+    """Cards for list A must not appear in list B's response."""
+    board_id = _create_board(client)
+    list_a = _create_list(client, board_id, "A")
+    list_b = _create_list(client, board_id, "B")
+    _create_card(client, list_a["id"], "Only in A")
+    cards_b = client.get(f"/lists/{list_b['id']}/cards").json()
+    assert all(c["title"] != "Only in A" for c in cards_b)
+
+
+def test_get_cards_404_on_missing_list(client):
+    resp = client.get("/lists/99999/cards")
+    assert resp.status_code == 404
+
+
+def test_get_cards_404_detail_contains_list_id(client):
+    resp = client.get("/lists/99999/cards")
+    assert "99999" in resp.json()["detail"]
+
+
+def test_get_cards_position_not_reindexed_after_delete(client):
+    """Deleting a card must not reindex siblings (AC9)."""
+    board_id = _create_board(client)
+    lst = _create_list(client, board_id)
+    a = _create_card(client, lst["id"], "A")  # position 0
+    b = _create_card(client, lst["id"], "B")  # position 1
+    c = _create_card(client, lst["id"], "C")  # position 2
+    client.delete(f"/cards/{b['id']}")
+    cards = client.get(f"/lists/{lst['id']}/cards").json()
+    by_title = {c["title"]: c["position"] for c in cards}
+    assert by_title["A"] == 0
+    assert by_title["C"] == 2  # position not reindexed

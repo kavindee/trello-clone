@@ -16,6 +16,7 @@ import {
   getLists,
   createList,
   deleteList,
+  getCards,
   createCard,
   updateCard,
   deleteCard,
@@ -236,6 +237,27 @@ describe('deleteList', () => {
 // ---------------------------------------------------------------------------
 // Card endpoints
 // ---------------------------------------------------------------------------
+
+describe('getCards', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+
+  it('returns Card[] on 200', async () => {
+    const cards = [{ id: 1, list_id: 3, title: 'Task', position: 0, created_at: '' }];
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, cards));
+    expect(await getCards(3)).toEqual(cards);
+  });
+
+  it('calls GET /lists/:listId/cards', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(200, []));
+    await getCards(7);
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith('http://localhost:8000/lists/7/cards');
+  });
+
+  it('throws ApiError(404) when list missing', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockResponse(404, { detail: 'List not found' }));
+    await expect(getCards(999)).rejects.toMatchObject({ status: 404 });
+  });
+});
 
 describe('createCard', () => {
   beforeEach(() => vi.stubGlobal('fetch', vi.fn()));

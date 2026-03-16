@@ -287,7 +287,7 @@ serves any request.
 
 ---
 
-- [ ] **Task 8: Cards UI**
+- [x] **Task 8: Cards UI**
       Complete `ListColumn.tsx`: render cards from props, create card form
       (inline validation EC5/EC7), "No cards yet" empty state. Implement
       `CardItem.tsx`: display title as text content (not innerHTML — EC9),
@@ -417,6 +417,6 @@ _(Filled during execution)_
 | T5   | ✅ Done | prereq AC1–AC12, EC8 | 42 tests pass; build clean; hash routing verified; all api.ts typed (no any); extractError handles all FastAPI error shapes |
 | T6   | ✅ Done | AC1, AC2, AC3, EC4 (boards), EC5, EC7, EC8 | 76 tests pass; build clean; ErrorBanner auto-dismiss + manual close verified; XSS plain-text confirmed; all validation blocks API call |
 | T7   | ✅ Done | AC4, AC5, AC6, AC7, EC4, EC5, EC6, EC7, EC8 | 107 tests pass; build clean; parallel fetch verified; 404 error state no-crash; delete last list → empty state; all validation blocks API call |
-| T8   |        |             |       |
+| T8   | ✅ Done | AC8, AC9, AC10, AC11, AC12, EC3, EC4 (cards), EC5, EC7, EC8, EC9 | 152 backend + 151 frontend tests pass; build clean; spec gap GET /lists/{id}/cards added; AC10 title from API body verified; EC3 no-API same-list guard; refreshSignal wires move-in to target column |
 | T9   |        |             |       |
 | T10  |        |             |       |

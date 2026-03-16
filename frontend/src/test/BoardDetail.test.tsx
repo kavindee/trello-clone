@@ -30,6 +30,8 @@ const mockLists = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // ListColumn (rendered by BoardDetail) calls getCards on mount
+  vi.mocked(api.getCards).mockResolvedValue([]);
 });
 
 // ---------------------------------------------------------------------------

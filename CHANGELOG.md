@@ -6,6 +6,81 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Task 8 — Cards UI (2026-03-16)
+
+**Spec gap fixed**
+- `backend/routers/lists.py` — added `GET /lists/{list_id}/cards` endpoint:
+  returns `Card[]` ordered by `position ASC`; 404 if list missing.
+  Frontend cannot display cards without this endpoint; not in original AC13.
+
+**Added (backend)**
+- 10 new tests appended to `backend/tests/test_lists.py`:
+  `test_get_cards_returns_200`, `test_get_cards_empty_when_no_cards`,
+  `test_get_cards_returns_created_cards`, `test_get_cards_ordered_by_position_asc`,
+  `test_get_cards_response_schema`, `test_get_cards_isolates_lists`,
+  `test_get_cards_404_on_missing_list`, `test_get_cards_404_detail_contains_list_id`,
+  `test_get_cards_position_not_reindexed_after_delete`
+
+**Added (frontend)**
+- `frontend/src/api.ts` — `getCards(listId)`: `GET /lists/:listId/cards → Card[]`
+- `frontend/src/components/CardItem.tsx` — full card with:
+  - Display mode: title as `<span>` text child (EC9), Edit + Delete buttons,
+    "Move to list" dropdown (other lists only)
+  - Edit mode: input pre-filled with current title, counter X/255 (EC7),
+    whitespace/empty blocked (EC5), 256-char blocked (EC7); Save updates
+    `displayTitle` from API response body NOT local input (AC10); Cancel
+    returns to display without API call; ErrorBanner on failure, stays in
+    edit mode (EC8)
+  - Delete: `deleteCard → onDeleted()` on success; ErrorBanner on failure
+  - Move: `updateCard({ list_id }) → onMoved(cardId, targetListId)` on success;
+    same-list guard (EC3 — no API call); ErrorBanner on failure
+  - `displayTitle` state initialised from prop, updated only from API response
+- `frontend/src/styles/CardItem.module.css` — card with subtle border/shadow;
+  hover actions; move row; edit-mode inline input + counter
+- `frontend/src/components/ListColumn.tsx` (completed from T7 shell):
+  - Fetches cards via `getCards(list.id)` on mount (AC9 order preserved)
+  - Re-fetches when `refreshSignal` prop increments (card moved in from another column)
+  - Renders each card as `<CardItem />`; "No cards yet" when empty (EC4)
+  - Create card form: counter, EC5/EC7 validation, success appends, failure ErrorBanner
+  - `handleCardDeleted(id)` / `handleCardMoved(id, targetListId)` / `handleCardUpdated`
+    — mutate local `cards` state; `onCardMovedOut(targetListId)` bubbles to BoardDetail
+- `frontend/src/styles/ListColumn.module.css` — added create-card form styles
+
+**Changed**
+- `frontend/src/components/BoardDetail.tsx` — added `listRefreshSignals` state
+  (`Record<number, number>`); `handleCardMovedOut(targetListId)` increments target
+  list's signal; passes `refreshSignal` + `onCardMovedOut` to each `ListColumn`
+- `frontend/src/test/BoardDetail.test.tsx` — added
+  `vi.mocked(api.getCards).mockResolvedValue([])` to `beforeEach` (real ListColumn
+  now fetches cards on mount)
+
+**Added (tests — TDD)**
+- `frontend/src/test/CardItem.test.tsx` — 29 tests: display/XSS, edit mode
+  (pre-fill, counter, cancel, EC5/EC7, AC10 server title, onUpdated, EC8 stays
+  in edit mode), delete (success/failure/onDeleted), move (success/failure/EC3/
+  no selection, onMoved)
+- `frontend/src/test/ListColumn.test.tsx` (rewritten) — 29 tests: T7 tests
+  updated (getCards mocked, aria-label selector refined), plus T8: mount fetch,
+  render cards, no-cards, refreshSignal re-fetch, create form counter/validation/
+  success/failure, card callbacks (deleted, moved + onCardMovedOut, updated)
+- `frontend/src/test/api.test.ts` — 3 tests for `getCards`
+
+**Verified**
+- `pytest backend/tests/` → **152 passed**, 0 errors
+- `npm test` → **151 passed** (8 test files), 0 errors
+- `npm run build` → TypeScript clean + Vite 203 kB JS, 0 errors
+- All verifiable output criteria met:
+  - Create card → appended to list immediately ✓
+  - Edit card → title shows API response body, not local input (AC10) ✓
+  - Delete card → removed immediately ✓
+  - Move card → disappears from source, re-fetch on target via refreshSignal ✓
+  - Move same list → no API call (EC3) ✓
+  - `<script>alert(1)</script>` renders as plain text (EC9) ✓
+  - "No cards yet" in empty list (EC4) ✓
+  - Failed API → ErrorBanner, UI unchanged (EC8) ✓
+
+---
+
 ### Task 7 — Board Detail + Lists UI (2026-03-16)
 
 **Added**

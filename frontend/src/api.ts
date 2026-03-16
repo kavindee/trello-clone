@@ -155,6 +155,13 @@ export async function deleteList(id: number): Promise<void> {
 // Card endpoints
 // ---------------------------------------------------------------------------
 
+/** GET /lists/:listId/cards — returns cards ordered by position ASC (spec gap fix). */
+export async function getCards(listId: number): Promise<Card[]> {
+  const resp = await fetch(`${API_BASE}/lists/${listId}/cards`);
+  await requireOk(resp);
+  return resp.json() as Promise<Card[]>;
+}
+
 /** POST /lists/:listId/cards — creates a card; returns the created Card (201). */
 export async function createCard(listId: number, title: string): Promise<Card> {
   const resp = await fetch(`${API_BASE}/lists/${listId}/cards`, {

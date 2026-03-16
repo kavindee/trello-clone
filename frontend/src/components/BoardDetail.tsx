@@ -42,6 +42,8 @@ export default function BoardDetail({ id }: Props) {
   const [inputValue, setInputValue] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // refreshSignals: keyed by list.id; incrementing tells that ListColumn to re-fetch cards
+  const [listRefreshSignals, setListRefreshSignals] = useState<Record<number, number>>({});
 
   // AC4 — fetch board + lists in parallel
   useEffect(() => {
@@ -86,6 +88,14 @@ export default function BoardDetail({ id }: Props) {
   // Called by ListColumn after it successfully deletes — update parent state
   function handleListDeleted(listId: number) {
     setLists((prev) => prev.filter((l) => l.id !== listId));
+  }
+
+  // Called by ListColumn when a card moves out to another list → refresh target
+  function handleCardMovedOut(targetListId: number) {
+    setListRefreshSignals((prev) => ({
+      ...prev,
+      [targetListId]: (prev[targetListId] ?? 0) + 1,
+    }));
   }
 
   const counterClass =
@@ -148,6 +158,8 @@ export default function BoardDetail({ id }: Props) {
                 list={list}
                 allLists={lists}
                 onDeleted={() => handleListDeleted(list.id)}
+                refreshSignal={listRefreshSignals[list.id] ?? 0}
+                onCardMovedOut={handleCardMovedOut}
               />
             ))}
           </ul>

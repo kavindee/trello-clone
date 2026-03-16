@@ -82,6 +82,37 @@ def get_lists(board_id: int, db: Session = Depends(get_db)):
     return lists
 
 
+@router.get(
+    "/lists/{list_id}/cards",
+    response_model=list[schemas.CardResponse],
+)
+def get_cards(list_id: int, db: Session = Depends(get_db)):
+    """Return all cards for a list ordered by position ASC (AC9).
+
+    This endpoint fills the spec gap: there is no card-list endpoint in the
+    original AC13 table, but the frontend cannot display cards without it.
+
+    Returns 404 if the list does not exist (AC15).
+    Returns an empty list if the list exists but has no cards (EC4).
+    """
+    lst = db.get(models.List, list_id)
+    if lst is None:
+        raise HTTPException(
+            status_code=404, detail=f"List {list_id} not found"
+        )
+
+    cards = (
+        db.execute(
+            select(models.Card)
+            .where(models.Card.list_id == list_id)
+            .order_by(models.Card.position.asc())
+        )
+        .scalars()
+        .all()
+    )
+    return cards
+
+
 @router.post(
     "/boards/{board_id}/lists",
     response_model=schemas.ListResponse,
