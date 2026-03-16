@@ -6,6 +6,34 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Task 3 — Lists API (2026-03-16)
+
+**Added**
+- `backend/routers/lists.py` — 3 endpoints:
+  - `GET  /boards/{id}/lists`  → 200 ordered `position ASC`; 404 if board missing
+  - `POST /boards/{id}/lists`  → 201; `position = COUNT(existing lists)` (0-based
+    append); full name validation via `ListCreate`; 404 if board missing
+  - `DELETE /lists/{id}`       → 204 / 404 / 500 on cascade failure; explicit
+    Python-level cascade via `_cascade_delete_list()` (patchable for EC2/AC16)
+- `backend/tests/test_lists.py` — 32 tests: all 3 endpoints, position ordering,
+  no-reindex-after-delete, 422 validation (9 cases), 404s, cascade (EC2), EC6
+  (delete-only-list keeps board alive and GET lists returns `[]` not 404).
+- `backend/tests/test_cascade.py` — extended with 4 EC2 tests: failure injection
+  after first DELETE reverts card deletion; sibling list unaffected; board intact;
+  sanity success path.
+
+**Changed**
+- `backend/main.py` — lists router imported and registered.
+
+**Verified**
+- `pytest backend/tests/` → 90 passed, 0 errors
+- `pytest test_lists.py test_cascade.py` → 40 passed, 0 errors
+- Lists returned ordered by `position ASC` ✓
+- No position reindex after delete ✓
+- EC2 injection test: partial cascade + rollback leaves list + cards intact ✓
+
+---
+
 ### Task 2 — Boards API + CORS (2026-03-16)
 
 **Added**

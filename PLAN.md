@@ -164,7 +164,7 @@ serves any request.
 
 ---
 
-- [ ] **Task 3: Lists API**
+- [x] **Task 3: Lists API**
       Implement `GET /boards/{id}/lists`, `POST /boards/{id}/lists`,
       `DELETE /lists/{id}`. Includes position assignment, list cascade delete
       (cards within the list), 404 handling, and input validation.
@@ -412,7 +412,7 @@ _(Filled during execution)_
 | ---- | ------ | ----------- | ----- |
 | T1   | ✅ Done | prereq AC13–AC16 | 21 smoke tests pass; kanban.db created; startup guard exits 1 on failure |
 | T2   | ✅ Done | AC1, AC2, AC3, AC13 (boards), AC14, AC15, AC16, EC1 | 54 tests pass; CORS header verified on live server; cascade atomicity injection test passes |
-| T3   |        |             |       |
+| T3   | ✅ Done | AC5, AC6, AC7, AC13 (lists), AC14, AC15, EC2, EC6 | 90 tests pass; position ordering verified; no-reindex confirmed; EC2 injection passes |
 | T4   |        |             |       |
 | T5   |        |             |       |
 | T6   |        |             |       |

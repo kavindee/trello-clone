@@ -35,6 +35,7 @@ from sqlalchemy import delete, select
 
 import models
 import routers.boards as boards_mod
+import routers.lists as lists_mod
 
 
 # ---------------------------------------------------------------------------
@@ -191,3 +192,117 @@ def test_board_cascade_handles_board_with_multiple_lists_and_cards(client, db):
     # All cards must still exist
     for cid in card_ids:
         assert db.get(models.Card, cid) is not None, f"Card {cid} must be intact"
+
+
+# ---------------------------------------------------------------------------
+# List cascade — EC2 / AC16
+# ---------------------------------------------------------------------------
+
+
+def _seed_list_with_cards(
+    client, db, board_id: int, list_name: str = "Test List"
+) -> tuple[int, list[int]]:
+    """Create a list via the API, then add cards directly to the DB.
+
+    Returns (list_id, [card_id, ...]).
+    """
+    resp = client.post(f"/boards/{board_id}/lists", json={"name": list_name})
+    assert resp.status_code == 201, resp.text
+    list_id: int = resp.json()["id"]
+
+    card_ids: list[int] = []
+    for i in range(2):
+        card = models.Card(list_id=list_id, title=f"Card {i}", position=i)
+        db.add(card)
+        db.flush()
+        card_ids.append(card.id)
+    db.commit()
+
+    return list_id, card_ids
+
+
+def test_list_cascade_is_atomic_on_mid_cascade_failure(client, db):
+    """EC2: injecting a failure after the first DELETE rolls back card deletions.
+
+    The partial cascade executes DELETE cards (first statement) and then
+    raises RuntimeError before DELETE list.  The router must catch this,
+    call db.rollback(), and return HTTP 500.  After that, both the list and
+    all its cards must still exist.
+    """
+    board_id = client.post("/boards", json={"name": "EC2 Board"}).json()["id"]
+    list_id, card_ids = _seed_list_with_cards(client, db, board_id)
+
+    def _partial_cascade(lid: int, sess) -> None:
+        """Delete cards (first DELETE) then raise before deleting the list."""
+        sess.execute(
+            delete(models.Card).where(models.Card.list_id == lid)
+        )
+        raise RuntimeError("Injected mid-cascade failure (after first DELETE)")
+
+    with patch.object(lists_mod, "_cascade_delete_list", _partial_cascade):
+        resp = client.delete(f"/lists/{list_id}")
+
+    assert resp.status_code == 500, (
+        f"Expected 500 from failed list cascade, got {resp.status_code}"
+    )
+
+    db.expire_all()
+
+    lst = db.get(models.List, list_id)
+    assert lst is not None, "List must survive a failed cascade delete"
+
+    for cid in card_ids:
+        assert db.get(models.Card, cid) is not None, (
+            f"Card {cid} must survive — first DELETE must have been rolled back"
+        )
+
+
+def test_list_cascade_failure_does_not_affect_sibling_lists(client, db):
+    """A failed list delete must leave sibling lists completely untouched."""
+    board_id = client.post("/boards", json={"name": "Sibling Board"}).json()["id"]
+    bad_list_id, _ = _seed_list_with_cards(client, db, board_id, "Bad List")
+    good_list_id = client.post(
+        f"/boards/{board_id}/lists", json={"name": "Good List"}
+    ).json()["id"]
+
+    def _failing_cascade(lid: int, sess) -> None:
+        raise RuntimeError("Instant failure — nothing deleted")
+
+    with patch.object(lists_mod, "_cascade_delete_list", _failing_cascade):
+        client.delete(f"/lists/{bad_list_id}")
+
+    # Good list must still be accessible
+    lists = client.get(f"/boards/{board_id}/lists").json()
+    assert any(lst["id"] == good_list_id for lst in lists), (
+        "Good list must be unaffected by a failed sibling delete"
+    )
+
+
+def test_list_cascade_failure_leaves_board_intact(client, db):
+    """A failed list delete must leave the parent board intact."""
+    board_id = client.post("/boards", json={"name": "Board Stays"}).json()["id"]
+    list_id, _ = _seed_list_with_cards(client, db, board_id)
+
+    def _failing_cascade(lid: int, sess) -> None:
+        raise RuntimeError("Instant failure")
+
+    with patch.object(lists_mod, "_cascade_delete_list", _failing_cascade):
+        client.delete(f"/lists/{list_id}")
+
+    assert client.get(f"/boards/{board_id}").status_code == 200, (
+        "Board must survive a failed list cascade delete"
+    )
+
+
+def test_successful_list_cascade_removes_list_and_cards(client, db):
+    """Sanity check: a clean list delete removes the list and all its cards."""
+    board_id = client.post("/boards", json={"name": "Sanity Board"}).json()["id"]
+    list_id, card_ids = _seed_list_with_cards(client, db, board_id)
+
+    resp = client.delete(f"/lists/{list_id}")
+    assert resp.status_code == 204
+
+    db.expire_all()
+    assert db.get(models.List, list_id) is None, "List must be deleted"
+    for cid in card_ids:
+        assert db.get(models.Card, cid) is None, f"Card {cid} must be deleted"

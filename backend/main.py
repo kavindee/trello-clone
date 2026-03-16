@@ -25,7 +25,7 @@ from fastapi import FastAPI                          # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware   # noqa: E402
 
 from database import Base, engine                    # noqa: E402
-from routers import boards                           # noqa: E402
+from routers import boards, lists                    # noqa: E402
 
 # ── Step 2: application instance ──────────────────────────────────────────
 app = FastAPI(title="Kanban Board API")
@@ -50,7 +50,8 @@ except Exception as exc:  # noqa: BLE001
 
 # ── Step 5: routers ───────────────────────────────────────────────────────
 app.include_router(boards.router)
-# lists and cards routers registered in Tasks 3 and 4
+app.include_router(lists.router)
+# cards router registered in Task 4
 
 
 # ── Meta ──────────────────────────────────────────────────────────────────
