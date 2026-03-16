@@ -137,7 +137,7 @@ serves any request.
 
 ---
 
-- [ ] **Task 2: Boards API + CORS**
+- [x] **Task 2: Boards API + CORS**
       **Sub-task 2a (CORS first — do not implement any endpoint until this
       checkpoint passes):** Add `CORSMiddleware` to `main.py`, read allowed
       origin from `CORS_ORIGIN` env var (default `http://localhost:5173`).
@@ -411,7 +411,7 @@ _(Filled during execution)_
 | Task | Status | AC Verified | Notes |
 | ---- | ------ | ----------- | ----- |
 | T1   | ✅ Done | prereq AC13–AC16 | 21 smoke tests pass; kanban.db created; startup guard exits 1 on failure |
-| T2   |        |             |       |
+| T2   | ✅ Done | AC1, AC2, AC3, AC13 (boards), AC14, AC15, AC16, EC1 | 54 tests pass; CORS header verified on live server; cascade atomicity injection test passes |
 | T3   |        |             |       |
 | T4   |        |             |       |
 | T5   |        |             |       |

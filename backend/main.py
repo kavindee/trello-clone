@@ -1,40 +1,59 @@
 """FastAPI application entry point.
 
-Startup guard: if SQLAlchemy cannot create the database tables the server
-logs the exception to stderr and exits with code 1 so that the process
-manager knows something went wrong rather than serving requests against a
-broken database state.
+Boot sequence
+-------------
+1. load_dotenv() — MUST be the first side-effecting call so that any local
+   module that reads os.getenv() at import time (e.g. database.py) sees the
+   values from the .env file.
+2. Create the FastAPI app instance.
+3. Register CORSMiddleware — origin read from CORS_ORIGIN env var.
+4. Startup guard — Base.metadata.create_all() wrapped in try/except; on
+   failure the exception is logged to stderr and sys.exit(1) is called so
+   the process manager knows not to route traffic to this instance.
+5. Register routers.
 """
 
+import os
 import sys
 
-from fastapi import FastAPI
+from dotenv import load_dotenv
 
-from database import Base, engine
+# ── Step 1: load .env BEFORE any local import that reads os.getenv() ──────
+load_dotenv()
 
+from fastapi import FastAPI                          # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware   # noqa: E402
+
+from database import Base, engine                    # noqa: E402
+from routers import boards                           # noqa: E402
+
+# ── Step 2: application instance ──────────────────────────────────────────
 app = FastAPI(title="Kanban Board API")
 
-# ---------------------------------------------------------------------------
-# Startup guard — SPEC §3: "if table creation fails, log to stderr and
-# sys.exit(1) before Uvicorn serves any request."
-# ---------------------------------------------------------------------------
+# ── Step 3: CORS ──────────────────────────────────────────────────────────
+_cors_origin: str = os.getenv("CORS_ORIGIN", "http://localhost:5173")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[_cors_origin],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Step 4: startup guard ─────────────────────────────────────────────────
 try:
     Base.metadata.create_all(bind=engine)
 except Exception as exc:  # noqa: BLE001
     print(f"FATAL: could not create database tables: {exc}", file=sys.stderr)
     sys.exit(1)
 
-
-# ---------------------------------------------------------------------------
-# Routers (registered here as they are implemented in later tasks)
-# ---------------------------------------------------------------------------
-# from routers import boards, lists, cards
-# app.include_router(boards.router)
-# app.include_router(lists.router)
-# app.include_router(cards.router)
+# ── Step 5: routers ───────────────────────────────────────────────────────
+app.include_router(boards.router)
+# lists and cards routers registered in Tasks 3 and 4
 
 
+# ── Meta ──────────────────────────────────────────────────────────────────
 @app.get("/healthz", tags=["meta"])
 def healthz():
     """Liveness probe — confirms the app started successfully."""

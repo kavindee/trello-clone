@@ -6,6 +6,41 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Task 2 — Boards API + CORS (2026-03-16)
+
+**Added**
+- `.env` / `.env.example` — updated `DATABASE_URL` → `kanban.db` (per SPEC §3),
+  added `CORS_ORIGIN=http://localhost:5173`.
+- `backend/main.py` — `load_dotenv()` called before any local import; added
+  `CORSMiddleware` reading `CORS_ORIGIN` env var (default `http://localhost:5173`);
+  boards router registered.
+- `backend/routers/boards.py` — 4 endpoints:
+  - `GET  /boards`        → 200, list ordered `created_at ASC, id ASC`
+  - `POST /boards`        → 201, Pydantic validation via `BoardCreate`
+  - `GET  /boards/{id}`   → 200 / 404
+  - `DELETE /boards/{id}` → 204 / 404 / 500 on cascade failure; explicit
+    Python-level cascade via `_cascade_delete_board()` (patchable for AC16).
+- `backend/tests/test_boards.py` — 29 tests: CORS headers, all endpoints,
+  all 422 validation paths, 404 handling, cascade coverage.
+- `backend/tests/test_cascade.py` — 4 tests: AC16 failure injection (partial
+  cascade + rollback), unrelated board unaffected, sanity + multi-list variant.
+
+**Changed**
+- `backend/tests/conftest.py` — switched from shared-session-with-rollback to
+  **per-test `StaticPool` in-memory engine**. Fixes `db.commit()` isolation:
+  router commits now land in an isolated in-memory DB that is disposed after
+  each test, not the shared session-scoped engine.
+- `backend/tests/test_smoke.py` — removed `create_test_tables` fixture
+  dependency; `test_tables_exist_in_test_engine` now queries `sqlite_master`
+  via the `db` fixture instead of importing the module-level engine directly.
+
+**Verified**
+- `pytest backend/tests/` → 54 passed, 0 errors
+- Live uvicorn: `GET /boards` with `Origin: http://localhost:5173` →
+  `access-control-allow-origin: http://localhost:5173` ✓
+- `kanban.db` created on server start (16 KB) ✓
+- Sub-task 2a CORS checkpoint: ✓
+
 ### Task 1 — Project Scaffolding + DB Layer (2026-03-16)
 
 **Added**

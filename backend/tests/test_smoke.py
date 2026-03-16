@@ -2,7 +2,8 @@
 
 These tests verify:
   - database.py, models.py, schemas.py, and main.py all import cleanly.
-  - SQLAlchemy can create all tables against an in-memory engine.
+  - SQLAlchemy can create all tables against an in-memory engine (via the
+    `db` fixture, which creates a fresh in-memory DB per test).
   - Pydantic schemas accept valid input and reject invalid input.
   - The /healthz endpoint responds 200.
   - The `db` and `client` fixtures from conftest.py work correctly.
@@ -10,7 +11,7 @@ These tests verify:
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import inspect
+from sqlalchemy import text
 
 import database
 import models
@@ -23,20 +24,21 @@ from database import Base
 # ---------------------------------------------------------------------------
 
 
-def test_base_metadata_has_expected_tables(create_test_tables):
-    """All three ORM tables must be registered on Base.metadata."""
+def test_base_metadata_has_expected_tables():
+    """All three ORM tables must be registered on Base.metadata.
+    This only requires the models module to be imported — no DB connection."""
     table_names = set(Base.metadata.tables.keys())
     assert "boards" in table_names
     assert "lists" in table_names
     assert "cards" in table_names
 
 
-def test_tables_exist_in_test_engine(create_test_tables):
-    """create_all() must have materialised all tables in the in-memory DB."""
-    from tests.conftest import test_engine
-
-    inspector = inspect(test_engine)
-    physical_tables = set(inspector.get_table_names())
+def test_tables_exist_in_db_fixture(db):
+    """create_all() inside the `db` fixture must have created all tables."""
+    result = db.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table'")
+    ).fetchall()
+    physical_tables = {row[0] for row in result}
     assert "boards" in physical_tables
     assert "lists" in physical_tables
     assert "cards" in physical_tables
@@ -168,7 +170,5 @@ def test_healthz_returns_200(client):
 
 def test_db_fixture_creates_usable_session(db):
     """Verify the db fixture yields a live, working SQLAlchemy session."""
-    from sqlalchemy import text
-
     result = db.execute(text("SELECT 1")).scalar()
     assert result == 1
