@@ -72,7 +72,7 @@ export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated
 
   // ── Edit helpers ──────────────────────────────────────────────────────────
   function startEdit() {
-    setEditValue(card.title);
+    setEditValue(displayTitle); // use local state — always in sync with last save
     setEditError(null);
     setEditing(true);
   }

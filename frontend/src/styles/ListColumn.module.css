@@ -1,15 +1,22 @@
-/* ListColumn.module.css */
+/* ─────────────────────────────────────────────────────────────
+   ListColumn — a single kanban column
+   Structure: header → scrollable card area → create-card form
+───────────────────────────────────────────────────────────── */
+
+/* ── Column card shell ────────────────────────────────────── */
 
 .column {
   display: flex;
   flex-direction: column;
-  min-width: 280px;
-  max-width: 280px;
-  background: #f4f5f7;
-  border-radius: 10px;
-  padding: 0.75rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  width: 272px;
+  min-width: 272px;
+  max-width: 272px;
+  max-height: calc(100vh - 130px); /* keeps column within viewport */
+  background: #f1f5f9;
+  border-radius: 14px;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  overflow: hidden;              /* clip rounded corners */
 }
 
 /* ── Column header ────────────────────────────────────────── */
@@ -17,55 +24,79 @@
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.6rem;
   gap: 0.5rem;
+  padding: 0.8rem 0.9rem 0.7rem;
+  background: #e2e8f0;
+  flex-shrink: 0;
+  border-bottom: 1px solid #cbd5e1;
 }
 
 .listName {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: #1a1a2e;
   flex: 1;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #1e293b;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
 }
 
 .deleteButton {
   background: none;
-  border: 1px solid transparent;
-  color: #999;
-  font-size: 0.8rem;
-  padding: 0.2rem 0.45rem;
-  border-radius: 4px;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 5px;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
 }
 
 .deleteButton:hover {
-  background: #fdecea;
-  color: #e53935;
-  border-color: #e53935;
+  background: #fecaca;
+  color: #dc2626;
 }
 
-/* ── Card area ────────────────────────────────────────────── */
+/* ── Scrollable card list ─────────────────────────────────── */
 
 .cardArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.65rem 0.65rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  min-height: 60px;
-  flex: 1;
+  gap: 0.5rem;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  /* minimum visible height even when empty */
+  min-height: 48px;
 }
 
+.cardArea::-webkit-scrollbar {
+  width: 5px;
+}
+
+.cardArea::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+/* ── Empty state ──────────────────────────────────────────── */
+
 .empty {
+  color: #94a3b8;
+  font-size: 0.8rem;
   text-align: center;
-  color: #aaa;
-  font-size: 0.85rem;
-  padding: 1rem 0;
+  padding: 0.75rem 0.5rem;
   margin: 0;
+  font-style: italic;
 }
 
 /* ── Create card form ─────────────────────────────────────── */
@@ -73,8 +104,11 @@
 .createForm {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.5rem;
+  gap: 0.3rem;
+  padding: 0.65rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  flex-shrink: 0;
 }
 
 .createRow {
@@ -84,27 +118,34 @@
 
 .createInput {
   flex: 1;
-  padding: 0.3rem 0.45rem;
-  font-size: 0.82rem;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+  padding: 0.42rem 0.6rem;
+  font-size: 0.83rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
   outline: none;
+  background: #fff;
+  color: #1e293b;
   min-width: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.createInput::placeholder {
+  color: #94a3b8;
 }
 
 .createInput:focus {
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 2px rgba(74,144,226,0.15);
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgba(129,140,248,.2);
 }
 
 .createButton {
-  padding: 0.3rem 0.6rem;
+  padding: 0.42rem 0.7rem;
   font-size: 0.82rem;
   font-weight: 600;
-  background: #4a90e2;
+  background: #4f46e5;
   color: #fff;
   border: none;
-  border-radius: 5px;
+  border-radius: 7px;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s;
@@ -112,28 +153,28 @@
 }
 
 .createButton:hover:not(:disabled) {
-  background: #357abd;
+  background: #4338ca;
 }
 
 .createButton:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
 .counter {
-  font-size: 0.72rem;
-  color: #aaa;
+  font-size: 0.7rem;
+  color: #94a3b8;
   text-align: right;
 }
 
 .counterOver {
-  font-size: 0.72rem;
-  color: #e53935;
-  font-weight: 700;
+  font-size: 0.7rem;
+  color: #ef4444;
+  font-weight: 600;
   text-align: right;
 }
 
 .createError {
-  font-size: 0.78rem;
-  color: #e53935;
+  font-size: 0.76rem;
+  color: #ef4444;
 }

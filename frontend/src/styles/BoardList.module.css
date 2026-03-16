@@ -1,149 +1,222 @@
-/* BoardList.module.css */
+/* ─────────────────────────────────────────────────────────────
+   BoardList — home page
+   Layout: full-page gradient → centred form → board tile grid
+───────────────────────────────────────────────────────────── */
+
+/* ── Page shell ───────────────────────────────────────────── */
 
 .container {
-  max-width: 640px;
-  margin: 2rem auto;
-  padding: 0 1rem;
-  font-family: system-ui, sans-serif;
-}
-
-.heading {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-bottom: 1.25rem;
-  color: #1a1a2e;
-}
-
-/* ── Create form ──────────────────────────────────────────── */
-
-.form {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin-bottom: 1.5rem;
+  align-items: center;
+  background: linear-gradient(160deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+  padding: 0 1.5rem 4rem;
+}
+
+/* ── Hero heading ─────────────────────────────────────────── */
+
+.heading {
+  margin-top: 3.5rem;
+  margin-bottom: 0.35rem;
+  color: #fff;
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  text-align: center;
+  text-shadow: 0 2px 20px rgba(0,0,0,.3);
+  width: 100%;
+  max-width: 820px;
+}
+
+/* ── Create board form ────────────────────────────────────── */
+
+.form {
+  width: 100%;
+  max-width: 820px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem 1.5rem;
+  margin-top: 2rem;
+  margin-bottom: 2.25rem;
+  backdrop-filter: blur(14px);
 }
 
 .inputRow {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .input {
   flex: 1;
-  padding: 0.5rem 0.75rem;
-  font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+  background: rgba(255,255,255,0.92);
+  border: 2px solid transparent;
+  border-radius: 10px;
   outline: none;
-  transition: border-color 0.15s;
+  color: #1e293b;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 
+.input::placeholder { color: #94a3b8; }
+
 .input:focus {
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.15);
+  background: #fff;
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(165,180,252,.35);
 }
 
 .addButton {
-  padding: 0.5rem 1rem;
+  padding: 0.7rem 1.5rem;
   font-size: 0.95rem;
   font-weight: 600;
-  background: #4a90e2;
+  background: #4f46e5;
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 2px 10px rgba(79,70,229,.45);
 }
 
 .addButton:hover:not(:disabled) {
-  background: #357abd;
+  background: #4338ca;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(79,70,229,.55);
+}
+
+.addButton:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .addButton:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .counter {
-  font-size: 0.78rem;
-  color: #888;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.45);
   text-align: right;
 }
 
 .counterOver {
-  color: #e53935;
+  font-size: 0.75rem;
+  color: #fca5a5;
   font-weight: 600;
+  text-align: right;
 }
 
 .validationError {
-  font-size: 0.85rem;
-  color: #e53935;
+  font-size: 0.82rem;
+  color: #fca5a5;
+  padding-left: 0.15rem;
 }
 
 /* ── Empty state ──────────────────────────────────────────── */
 
 .empty {
-  text-align: center;
-  color: #888;
+  color: rgba(255,255,255,0.4);
   font-size: 1rem;
+  text-align: center;
   margin-top: 3rem;
+  width: 100%;
 }
 
-/* ── Board list ───────────────────────────────────────────── */
+/* ── Board tile grid ──────────────────────────────────────── */
 
 .list {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  width: 100%;
+  max-width: 820px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 1rem;
 }
+
+/* ── Single board tile
+     Structure: ::before stripe │ .boardLink │ .deleteButton
+     flex-column so link takes the bulk, button anchors at bottom
+───────────────────────────────────────────────────────────── */
 
 .item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.15s;
+  flex-direction: column;
+  background: rgba(255,255,255,0.97);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  min-height: 110px;
 }
 
 .item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(0,0,0,.22);
 }
 
-.boardLink {
-  font-size: 1rem;
-  font-weight: 500;
-  color: #1a1a2e;
-  text-decoration: none;
-  flex: 1;
-}
-
-.boardLink:hover {
-  color: #4a90e2;
-  text-decoration: underline;
-}
-
-.deleteButton {
-  background: none;
-  border: 1px solid #e0e0e0;
-  color: #888;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.8rem;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+/* Coloured accent stripe — rotates palette every 3 items */
+.item::before {
+  content: '';
+  display: block;
+  height: 6px;
+  background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
   flex-shrink: 0;
 }
 
+.item:nth-child(3n+2)::before {
+  background: linear-gradient(90deg, #0891b2 0%, #0e7490 100%);
+}
+
+.item:nth-child(3n+3)::before {
+  background: linear-gradient(90deg, #059669 0%, #0f766e 100%);
+}
+
+/* Board name link fills available height */
+.boardLink {
+  flex: 1;
+  display: block;
+  padding: 1rem 1.1rem 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e293b;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.boardLink:hover {
+  color: #4f46e5;
+}
+
+/* Delete button anchors to bottom-right of the tile */
+.deleteButton {
+  align-self: flex-end;
+  margin: 0 0.75rem 0.75rem;
+  background: none;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
 .deleteButton:hover {
-  background: #fdecea;
-  color: #e53935;
-  border-color: #e53935;
+  background: #fef2f2;
+  color: #ef4444;
+  border-color: #fecaca;
 }

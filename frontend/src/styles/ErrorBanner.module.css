@@ -1,24 +1,27 @@
-/* ErrorBanner.module.css */
+/* ─────────────────────────────────────────────────────────────
+   ErrorBanner — EC8 inline error with 5-second auto-dismiss
+───────────────────────────────────────────────────────────── */
 
 .banner {
   display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-left: 4px solid #e53935;
-  border-radius: 6px;
-  color: #333;
-  font-size: 0.9rem;
-  animation: slideDown 0.2s ease-out;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.75rem;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-left: 4px solid #ef4444;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #1e293b;
+  animation: slideIn 0.2s ease-out;
+  box-shadow: 0 2px 8px rgba(239,68,68,.12);
 }
 
-@keyframes slideDown {
+@keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
@@ -28,29 +31,38 @@
 
 .status {
   font-weight: 700;
-  color: #e53935;
+  color: #ef4444;
+  font-size: 0.82rem;
   white-space: nowrap;
+  background: #fee2e2;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
   flex-shrink: 0;
 }
 
 .message {
   flex: 1;
+  color: #475569;
   word-break: break-word;
+  font-size: 0.84rem;
+  line-height: 1.4;
 }
 
 .close {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   line-height: 1;
-  color: #666;
-  padding: 0 0.25rem;
-  margin-left: auto;
+  color: #94a3b8;
+  padding: 0.1rem 0.25rem;
   flex-shrink: 0;
-  transition: color 0.15s;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  margin-left: auto;
 }
 
 .close:hover {
-  color: #e53935;
+  color: #ef4444;
+  background: #fee2e2;
 }

@@ -6,6 +6,41 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Task 9 — README + Smoke Test (2026-03-16)
+
+**Added**
+- `README.md` — project root; sections: Prerequisites, Backend Setup,
+  Frontend Setup, Environment Variables, Running Tests, Project Structure,
+  API Reference, Smoke-Test Checklist, Known Limitations
+
+**Fixed (bugs found during smoke test walkthrough)**
+- `frontend/src/components/CardItem.tsx` — `startEdit()` now seeds the edit
+  input from `displayTitle` (local state) instead of `card.title` (prop).
+  Eliminates a stale-prop window between `setDisplayTitle` and the parent
+  re-render; ensures re-opening edit mode after a save always shows the
+  most recent title.
+- `frontend/src/styles/BoardDetail.module.css` — `.empty` changed from
+  `width: 100%` to `flex: 1; align-self: center` so "No lists yet" text
+  centres correctly in the flex-row canvas alongside the add-list form panel.
+
+**Verified (programmatic smoke test)**
+- `pytest backend/tests/ -v` → **152 passed**, 0 failures, 0 errors ✓
+- `npm test` → **151 passed** (8 files), 0 failures ✓
+- `npm run build` → TypeScript clean + Vite 203 kB JS ✓
+- Startup guard: `sys.exit(1)` + `stderr` message on `create_all` failure ✓
+- CORS: `Access-Control-Allow-Origin: http://localhost:5173` on every response ✓
+- Whitespace name → `422` ✓ | Newline in name → `422` ✓
+- 256-char name → `422` ✓ | 255-char name → `201` ✓
+- Board → list → card create/edit/delete chain ✓
+- Move card A→B: source empty, target contains card ✓
+- EC3: same-list move returns unchanged card, position unchanged ✓
+- Cascade board delete: board + lists + cards all gone (404) ✓
+- `healthz` endpoint: `{"status": "ok"}` ✓
+
+**PLAN.md — all AC/EC checkboxes marked complete (T9 integration pass)**
+
+---
+
 ### Task 8 — Cards UI (2026-03-16)
 
 **Spec gap fixed**

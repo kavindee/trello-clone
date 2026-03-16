@@ -318,7 +318,7 @@ serves any request.
 
 ---
 
-- [ ] **Task 9: README + Smoke Test**
+- [x] **Task 9: README + Smoke Test**
       Write `README.md` with setup instructions for both backend and frontend.
       Perform a full manual walkthrough using the checklist below. Fix any
       integration issues found (touches ≤ 3 files).
@@ -364,43 +364,43 @@ serves any request.
 
 ### Boards
 
-- [ ] AC1 — Create a board → T2 (API), T6 (UI)
-- [ ] AC2 — List all boards ordered by `created_at ASC` → T2 (API), T6 (UI)
-- [ ] AC3 — Delete a board (cascade) → T2 (API), T6 (UI)
-- [ ] AC4 — View a board (metadata + lists) → T3 (API), T7 (UI)
+- [x] AC1 — Create a board → T2 (API), T6 (UI)
+- [x] AC2 — List all boards ordered by `created_at ASC` → T2 (API), T6 (UI)
+- [x] AC3 — Delete a board (cascade) → T2 (API), T6 (UI)
+- [x] AC4 — View a board (metadata + lists) → T3 (API), T7 (UI)
 
 ### Lists
 
-- [ ] AC5 — Create a list → T3 (API), T7 (UI)
-- [ ] AC6 — List order preserved (`position ASC`) → T3 (API), T7 (UI)
-- [ ] AC7 — Delete a list (cascade cards) → T3 (API), T7 (UI)
+- [x] AC5 — Create a list → T3 (API), T7 (UI)
+- [x] AC6 — List order preserved (`position ASC`) → T3 (API), T7 (UI)
+- [x] AC7 — Delete a list (cascade cards) → T3 (API), T7 (UI)
 
 ### Cards
 
-- [ ] AC8 — Create a card → T4 (API), T8 (UI)
-- [ ] AC9 — Card order preserved (`position ASC`) → T4 (API), T8 (UI)
-- [ ] AC10 — Edit card title (update from response body) → T4 (API), T8 (UI)
-- [ ] AC11 — Delete a card → T4 (API), T8 (UI)
-- [ ] AC12 — Move card to another list → T4 (API), T8 (UI)
+- [x] AC8 — Create a card → T4 (API), T8 (UI)
+- [x] AC9 — Card order preserved (`position ASC`) → T4 (API), T8 (UI)
+- [x] AC10 — Edit card title (update from response body) → T4 (API), T8 (UI)
+- [x] AC11 — Delete a card → T4 (API), T8 (UI)
+- [x] AC12 — Move card to another list → T4 (API), T8 (UI)
 
 ### API Contracts
 
-- [ ] AC13 — All 10 RESTful endpoints present → T2 (boards), T3 (lists), T4 (cards)
-- [ ] AC14 — Input validation (empty, whitespace, length, newline, PATCH body) → T2, T3, T4
-- [ ] AC15 — 404 for missing board/list/card → T2, T3, T4
-- [ ] AC16 — Cascade delete atomicity (failure-injection test) → T2 (`test_cascade.py`)
+- [x] AC13 — All 10 RESTful endpoints present → T2 (boards), T3 (lists), T4 (cards)
+- [x] AC14 — Input validation (empty, whitespace, length, newline, PATCH body) → T2, T3, T4
+- [x] AC15 — 404 for missing board/list/card → T2, T3, T4
+- [x] AC16 — Cascade delete atomicity (failure-injection test) → T2 (`test_cascade.py`)
 
 ### Edge Cases
 
-- [ ] EC1 — Board cascade delete (lists + cards atomic) → T2
-- [ ] EC2 — List cascade delete (cards atomic) → T3
-- [ ] EC3 — Move card to same list is a no-op (`200`, no write) → T4, T8
-- [ ] EC4 — "No lists yet" / "No cards yet" empty states → T7, T8
-- [ ] EC5 — Whitespace-only input rejected (UI + API) → T2, T3, T4, T6, T8
-- [ ] EC6 — Delete only list → board stays, "No lists yet" shown → T3, T7
-- [ ] EC7 — Titles >255 chars rejected; UI shows character counter → T2, T3, T4, T6, T8
-- [ ] EC8 — ErrorBanner on failed API call; auto-dismiss 5s → T6, T7, T8
-- [ ] EC9 — Special chars OK; newlines → 422; titles as text not HTML → T4, T8
+- [x] EC1 — Board cascade delete (lists + cards atomic) → T2
+- [x] EC2 — List cascade delete (cards atomic) → T3
+- [x] EC3 — Move card to same list is a no-op (`200`, no write) → T4, T8
+- [x] EC4 — "No lists yet" / "No cards yet" empty states → T7, T8
+- [x] EC5 — Whitespace-only input rejected (UI + API) → T2, T3, T4, T6, T8
+- [x] EC6 — Delete only list → board stays, "No lists yet" shown → T3, T7
+- [x] EC7 — Titles >255 chars rejected; UI shows character counter → T2, T3, T4, T6, T8
+- [x] EC8 — ErrorBanner on failed API call; auto-dismiss 5s → T6, T7, T8
+- [x] EC9 — Special chars OK; newlines → 422; titles as text not HTML → T4, T8
 
 ---
 
@@ -418,5 +418,5 @@ _(Filled during execution)_
 | T6   | ✅ Done | AC1, AC2, AC3, EC4 (boards), EC5, EC7, EC8 | 76 tests pass; build clean; ErrorBanner auto-dismiss + manual close verified; XSS plain-text confirmed; all validation blocks API call |
 | T7   | ✅ Done | AC4, AC5, AC6, AC7, EC4, EC5, EC6, EC7, EC8 | 107 tests pass; build clean; parallel fetch verified; 404 error state no-crash; delete last list → empty state; all validation blocks API call |
 | T8   | ✅ Done | AC8, AC9, AC10, AC11, AC12, EC3, EC4 (cards), EC5, EC7, EC8, EC9 | 152 backend + 151 frontend tests pass; build clean; spec gap GET /lists/{id}/cards added; AC10 title from API body verified; EC3 no-API same-list guard; refreshSignal wires move-in to target column |
-| T9   |        |             |       |
+| T9   | ✅ Done | All ACs (integration) | README written; 2 bugs fixed (startEdit→displayTitle, empty-state flex layout); startup guard: exit 1 + stderr confirmed; CORS header confirmed; whitespace/newline/256-char → 422 confirmed; cascade delete verified; EC3 no-op verified; 152 backend + 151 frontend tests pass; build clean |
 | T10  |        |             |       |
