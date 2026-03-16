@@ -260,7 +260,7 @@ serves any request.
 
 ---
 
-- [ ] **Task 7: Board Detail + Lists UI**
+- [x] **Task 7: Board Detail + Lists UI**
       Implement `BoardDetail.tsx`: fetch board metadata via `GET /boards/{id}`
       and lists via `GET /boards/{id}/lists`, render columns side-by-side with
       horizontal scroll. Create list form (same validation as Task 6). Delete
@@ -416,7 +416,7 @@ _(Filled during execution)_
 | T4   | ✅ Done | AC8, AC9, AC10, AC11, AC12, AC13 (cards), AC14, AC15, EC3 | 143 tests pass; EC3 strict no-op verified; move position MAX+1 verified; atomic title+move verified |
 | T5   | ✅ Done | prereq AC1–AC12, EC8 | 42 tests pass; build clean; hash routing verified; all api.ts typed (no any); extractError handles all FastAPI error shapes |
 | T6   | ✅ Done | AC1, AC2, AC3, EC4 (boards), EC5, EC7, EC8 | 76 tests pass; build clean; ErrorBanner auto-dismiss + manual close verified; XSS plain-text confirmed; all validation blocks API call |
-| T7   |        |             |       |
+| T7   | ✅ Done | AC4, AC5, AC6, AC7, EC4, EC5, EC6, EC7, EC8 | 107 tests pass; build clean; parallel fetch verified; 404 error state no-crash; delete last list → empty state; all validation blocks API call |
 | T8   |        |             |       |
 | T9   |        |             |       |
 | T10  |        |             |       |

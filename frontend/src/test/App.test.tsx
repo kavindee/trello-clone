@@ -1,13 +1,12 @@
 /**
  * App.test.tsx
  *
- * Tests for hash-based routing in App.tsx:
- *   #/          → renders <BoardList /> (now real component)
- *   #/boards/1  → renders <BoardDetail id={1} /> placeholder
- *   unknown     → falls back to <BoardList />
+ * Tests for hash-based routing in App.tsx.
+ * All api calls are mocked to avoid network hits.
  *
- * The api module is mocked so BoardList's useEffect fetch doesn't hit the
- * network during routing tests.
+ *   #/          → renders <BoardList /> (real component)
+ *   #/boards/1  → renders <BoardDetail id={1} /> (real component)
+ *   unknown     → falls back to <BoardList />
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -17,6 +16,8 @@ import * as api from '../api';
 
 vi.mock('../api');
 
+const stubBoard = { id: 42, name: 'Stub Board 42', created_at: '' };
+
 function setHash(hash: string) {
   window.location.hash = hash;
 }
@@ -24,6 +25,8 @@ function setHash(hash: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.getBoards).mockResolvedValue([]);
+  vi.mocked(api.getBoard).mockResolvedValue(stubBoard);
+  vi.mocked(api.getLists).mockResolvedValue([]);
   setHash('');
 });
 
@@ -35,7 +38,6 @@ describe('App routing', () => {
   it('renders BoardList (Boards heading) at #/', async () => {
     setHash('#/');
     const { unmount } = render(<App />);
-    // Real BoardList renders an <h1>Boards</h1>
     expect(await screen.findByRole('heading', { name: /boards/i })).toBeInTheDocument();
     unmount();
   });
@@ -47,18 +49,18 @@ describe('App routing', () => {
     unmount();
   });
 
-  it('renders BoardDetail placeholder at #/boards/:id', () => {
+  it('renders BoardDetail at #/boards/:id — wrapper present', () => {
     setHash('#/boards/42');
     const { unmount } = render(<App />);
+    // data-testid="board-detail" is on the wrapper div and renders synchronously
     expect(screen.getByTestId('board-detail')).toBeInTheDocument();
-    expect(screen.getByTestId('board-detail').textContent).toContain('42');
     unmount();
   });
 
-  it('renders BoardDetail with correct id for #/boards/1', () => {
-    setHash('#/boards/1');
+  it('renders BoardDetail heading after data loads for #/boards/42', async () => {
+    setHash('#/boards/42');
     const { unmount } = render(<App />);
-    expect(screen.getByTestId('board-detail').textContent).toContain('1');
+    expect(await screen.findByRole('heading', { name: 'Stub Board 42' })).toBeInTheDocument();
     unmount();
   });
 
@@ -87,7 +89,6 @@ describe('App routing', () => {
     });
 
     expect(screen.getByTestId('board-detail')).toBeInTheDocument();
-    expect(screen.getByTestId('board-detail').textContent).toContain('7');
     unmount();
   });
 

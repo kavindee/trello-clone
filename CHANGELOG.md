@@ -6,6 +6,68 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Task 7 — Board Detail + Lists UI (2026-03-16)
+
+**Added**
+- `frontend/src/components/ListColumn.tsx` — column shell (Task 8 adds cards):
+  - Props: `{ list, allLists, onDeleted }` (`allLists` reserved for Task 8 card
+    move dropdown; prefixed `_allLists` to satisfy `noUnusedParameters`)
+  - Renders list name as text child (EC9), delete button, "No cards yet"
+    placeholder (EC4)
+  - Handles its own delete: calls `deleteList(list.id)`, then `onDeleted()` on
+    success; shows its own `ErrorBanner` on failure (EC8)
+- `frontend/src/components/BoardDetail.tsx` — full board detail page:
+  - `Promise.all([getBoard(id), getLists(id)])` parallel fetch on mount (AC4)
+  - 404 from `getBoard` → "Board not found" error state, no crash (AC15)
+  - Other load error → `ErrorBanner` (EC8)
+  - Board name rendered as `<h1>` heading; `← Back` link to `#/`
+  - Lists rendered as horizontal `<ListColumn>` items with overflow scroll (AC4/AC6)
+  - "No lists yet" centered empty state (EC4)
+  - Create list form: counter `X/255` (EC7); blocks empty/whitespace (EC5);
+    blocks >255 chars (EC7); no API call on invalid input; appends on success (AC5);
+    `ErrorBanner` + list unchanged on failure (EC8)
+  - `handleListDeleted(id)` callback passed to each `ListColumn` — filters list
+    from state on success; "No lists yet" reappears when last list removed (EC6/AC7)
+  - `data-testid="board-detail"` on wrapper so App routing tests work synchronously
+- `frontend/src/styles/ListColumn.module.css` — white-background column card,
+  rounded corners, shadow; header with name + right-aligned delete; min-height
+  card area; centred "No cards yet"
+- `frontend/src/styles/BoardDetail.module.css` — Trello-blue full-height page;
+  top bar with back link + board name; horizontal-scroll canvas; add-list form
+  panel; centred empty and error states
+
+**Changed**
+- `frontend/src/test/App.test.tsx` — updated BoardDetail routing tests to mock
+  `getBoard`/`getLists` in `beforeEach`; kept synchronous `getByTestId` check
+  (wrapper renders before fetch resolves); added async heading check; removed
+  `textContent.toContain(id)` assertion (not meaningful during loading state)
+
+**Added (tests — TDD)**
+- `frontend/src/test/ListColumn.test.tsx` — 8 tests: renders name/delete
+  button/"No cards yet"; `deleteList` called with correct id; `onDeleted` on
+  success; `ErrorBanner` + no `onDeleted` on failure
+- `frontend/src/test/BoardDetail.test.tsx` — 23 tests: parallel fetch, board
+  heading, back link, list columns, empty state, 404/non-404 load errors,
+  counter, whitespace/256-char validation (no API call), create appends,
+  create clears input, create removes empty state, create failure banner,
+  delete removes column, last delete → "No lists yet", delete failure banner,
+  XSS plain-text, validation error clears on type
+
+**Verified**
+- `npm test` → **107 passed** (7 test files), 0 errors
+- `npm run build` → TypeScript clean + Vite 198 kB JS, 0 errors
+- All verifiable output criteria met:
+  - `#/boards/1` → board name heading + lists render ✓
+  - Create list → new column appended immediately ✓
+  - Delete list → column removed immediately ✓
+  - Delete last list → "No lists yet" shown (EC6) ✓
+  - Invalid list name → inline message, zero API calls ✓
+  - API failure → ErrorBanner (status + message), list unchanged ✓
+  - Non-existent board ID → "Board not found", no crash ✓
+  - `npm run build` → zero TypeScript errors ✓
+
+---
+
 ### Task 6 — Board List Page (2026-03-16)
 
 **Added**
