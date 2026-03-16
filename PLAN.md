@@ -118,7 +118,7 @@ serves any request.
 
 ## 2. Tasks
 
-- [ ] **Task 1: Project Scaffolding + DB Layer**
+- [x] **Task 1: Project Scaffolding + DB Layer**
       Set up the monorepo skeleton, `requirements.txt`, SQLAlchemy engine +
       session factory, ORM models (Board, List, Card), Pydantic schemas for all
       request/response types, bare `main.py` with startup guard, and
@@ -410,7 +410,7 @@ _(Filled during execution)_
 
 | Task | Status | AC Verified | Notes |
 | ---- | ------ | ----------- | ----- |
-| T1   |        |             |       |
+| T1   | ✅ Done | prereq AC13–AC16 | 21 smoke tests pass; kanban.db created; startup guard exits 1 on failure |
 | T2   |        |             |       |
 | T3   |        |             |       |
 | T4   |        |             |       |
