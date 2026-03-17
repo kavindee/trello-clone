@@ -1,5 +1,5 @@
 /**
- * CardModal — modal overlay for creating or editing a card.
+ * CardModal — modal overlay for creating, editing, or previewing a card.
  *
  * Create mode: title required, description / start_date / due_date optional.
  *   Calls createCard(listId, payload) on submit.
@@ -8,11 +8,20 @@
  *   Calls updateCard(card.id, changedFields) on submit.
  *   Shows a move-to-list dropdown when allLists has more than one entry.
  *
- * Closes on: Cancel button | backdrop click | Escape key.
- * Stays open on: API failure (shows ErrorBanner inside the modal).
+ * Preview mode: read-only card detail view.
+ *   Shows title (heading), description, start date, due-date badge, list name.
+ *   Footer: Close (onClose) + Edit (onEdit) buttons.
+ *   No form inputs, no validation, no API calls.
+ *
+ * All modes:
+ *   Closes on: Cancel/Close button | backdrop click | Escape key.
+ *   Stays open on: API failure (shows ErrorBanner — create/edit only).
+ *   Rendered via ReactDOM.createPortal into document.body so the modal
+ *   escapes any ancestor transform / overflow / stacking context.
  */
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { createCard, updateCard } from '../api';
@@ -26,11 +35,12 @@ import styles from '../styles/CardModal.module.css';
 // ---------------------------------------------------------------------------
 
 interface Props {
-  mode: 'create' | 'edit';
-  listId?: number;      // required in create mode
-  card?: Card;          // required in edit mode
+  mode: 'create' | 'edit' | 'preview';
+  listId?: number;       // required in create mode
+  card?: Card;           // required in edit + preview modes
   allLists: List[];
-  onSuccess: (card: Card) => void;
+  onSuccess?: (card: Card) => void;  // create + edit modes
+  onEdit?: () => void;               // preview mode — switches to edit
   onClose: () => void;
 }
 
@@ -72,6 +82,21 @@ function validateDescription(value: string): string | null {
   return null;
 }
 
+type DueDateStatus = 'overdue' | 'soon' | 'future';
+
+function getDueDateStatus(dueDate: string | null): DueDateStatus | null {
+  if (!dueDate) return null;
+  const [y, m, d] = dueDate.split('-').map(Number);
+  const due = new Date(y, m - 1, d);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  if (due < today)     return 'overdue';
+  if (due <= tomorrow) return 'soon';
+  return 'future';
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -90,8 +115,11 @@ export default function CardModal({
   card,
   allLists,
   onSuccess,
+  onEdit,
   onClose,
 }: Props) {
+  // Form state — only consumed in create / edit modes; always initialised so
+  // hooks are called unconditionally (Rules of Hooks).
   const [title, setTitle]           = useState(card?.title ?? '');
   const [description, setDesc]      = useState(card?.description ?? '');
   const [startDate, setStartDate]   = useState<string | null>(card?.start_date ?? null);
@@ -103,7 +131,7 @@ export default function CardModal({
   const [apiError, setApiError]     = useState<ApiError | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Escape key closes the modal
+  // Escape key closes the modal (all modes)
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
@@ -137,7 +165,7 @@ export default function CardModal({
 
     try {
       const newCard = await createCard(listId!, payload);
-      onSuccess(newCard);
+      onSuccess!(newCard);
       onClose();
     } catch (err) {
       setApiError(err as ApiError);
@@ -160,14 +188,14 @@ export default function CardModal({
 
     try {
       const updated = await updateCard(card!.id, patch);
-      onSuccess(updated);
+      onSuccess!(updated);
       onClose();
     } catch (err) {
       setApiError(err as ApiError);
     }
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Submit (create / edit) ────────────────────────────────────────────────
   async function handleSubmit() {
     if (!validate()) return;
     setSubmitting(true);
@@ -176,12 +204,90 @@ export default function CardModal({
     setSubmitting(false);
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  const otherLists = allLists.filter((l) => l.id !== card?.list_id);
-  const titleCounterCls = title.length > MAX_TITLE ? styles.counterOver : styles.counter;
-  const descCounterCls  = description.length > MAX_DESC  ? styles.counterOver : styles.counter;
+  // ── Shared portal wrapper ─────────────────────────────────────────────────
+  // Both preview and create/edit share the same backdrop + modal-box shell.
 
-  return (
+  // ── Preview mode render ───────────────────────────────────────────────────
+  if (mode === 'preview') {
+    const listName     = allLists.find((l) => l.id === card!.list_id)?.name ?? '—';
+    const dueDateStatus = getDueDateStatus(card!.due_date);
+    const dueBadgeCls  =
+      dueDateStatus === 'overdue' ? styles.previewDueDateOverdue
+      : dueDateStatus === 'soon'  ? styles.previewDueDateSoon
+      :                             styles.previewDueDateFuture;
+
+    return createPortal(
+      <div
+        className={styles.backdrop}
+        data-testid="card-modal-backdrop"
+        onClick={onClose}
+      >
+        <div
+          className={styles.modal}
+          data-testid="card-modal-box"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* List name — small muted label at the top */}
+          <p className={styles.previewListName}>In list: {listName}</p>
+
+          {/* Title as a heading — not an input */}
+          <h2 className={styles.previewTitle}>{card!.title}</h2>
+
+          {/* Description or placeholder */}
+          {card!.description ? (
+            <p className={styles.previewDesc}>{card!.description}</p>
+          ) : (
+            <p className={styles.previewDescEmpty}>No description</p>
+          )}
+
+          {/* Dates row */}
+          <div className={styles.previewDateRow}>
+            {card!.start_date && (
+              <span className={styles.previewStartDate}>
+                Start: {card!.start_date}
+              </span>
+            )}
+            {card!.due_date && dueDateStatus && (
+              <span
+                className={dueBadgeCls}
+                data-testid={`preview-due-date-${dueDateStatus}`}
+              >
+                Due: {card!.due_date}
+              </span>
+            )}
+          </div>
+
+          {/* Footer — Close (left) + Edit (right) */}
+          <div className={styles.footer}>
+            <button
+              className={styles.cancelBtn}
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              Close
+            </button>
+            <button
+              className={styles.submitBtn}
+              type="button"
+              onClick={onEdit}
+              aria-label="Edit"
+            >
+              Edit
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  // ── Create / edit mode render ─────────────────────────────────────────────
+  const otherLists      = allLists.filter((l) => l.id !== card?.list_id);
+  const titleCounterCls = title.length > MAX_TITLE ? styles.counterOver : styles.counter;
+  const descCounterCls  = description.length > MAX_DESC ? styles.counterOver : styles.counter;
+
+  return createPortal(
     <div
       className={styles.backdrop}
       data-testid="card-modal-backdrop"
@@ -313,6 +419,7 @@ export default function CardModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

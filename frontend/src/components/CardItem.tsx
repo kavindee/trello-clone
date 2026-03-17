@@ -1,5 +1,5 @@
 /**
- * CardItem — single card: display / delete / move / edit-via-modal.
+ * CardItem — single card: preview / edit / delete / move.
  *
  * AC10  — all displayed card data (title, description, dates) comes from
  *          the API response body returned by CardModal.onSuccess, never
@@ -10,25 +10,27 @@
  * EC8   — ErrorBanner on delete / move failure; UI unchanged on failure
  * EC9   — title + description rendered as JSX text children, never innerHTML
  *
- * Display:
- *   - Title (text)
- *   - Description below title (text, only when set)
- *   - Due-date badge (overdue / soon / future) keyed on due_date
- *   - Start-date label "Start: YYYY-MM-DD" (only when set)
+ * Click interactions:
+ *   - Clicking anywhere on the card opens CardModal in preview mode
+ *   - Clicking the Edit button opens CardModal in edit mode directly
+ *     (stopPropagation so the card's onClick does not also fire)
+ *   - Clicking Delete deletes the card
+ *     (stopPropagation so the card's onClick does not also fire)
+ *   - The move-row has stopPropagation so interacting with it doesn't
+ *     open the preview modal
  *
- * Edit:
- *   - Edit button opens <CardModal mode="edit" card={displayCard} />
- *   - On onSuccess: update displayCard from API response (AC10), call onUpdated
- *   - On onClose:  close modal, no state change
+ * Single <CardModal /> instance — modalMode controls which mode is shown:
+ *   preview → onEdit() switches to edit mode (modal stays open)
+ *   edit    → onSuccess() updates displayCard (AC10) and closes modal
  */
 
-import { useState } from 'react';
-import { deleteCard, updateCard } from '../api';
-import type { ApiError } from '../api';
-import type { Card, List } from '../types';
-import CardModal from './CardModal';
-import ErrorBanner from './ErrorBanner';
-import styles from '../styles/CardItem.module.css';
+import { useState } from "react";
+import { deleteCard, updateCard } from "../api";
+import type { ApiError } from "../api";
+import type { Card, List } from "../types";
+import CardModal from "./CardModal";
+import ErrorBanner from "./ErrorBanner";
+import styles from "../styles/CardItem.module.css";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -46,19 +48,19 @@ interface Props {
 // Pure helpers
 // ---------------------------------------------------------------------------
 
-type DueDateStatus = 'overdue' | 'soon' | 'future';
+type DueDateStatus = "overdue" | "soon" | "future";
 
 function getDueDateStatus(dueDate: string | null): DueDateStatus | null {
   if (!dueDate) return null;
-  const [y, m, d] = dueDate.split('-').map(Number);
+  const [y, m, d] = dueDate.split("-").map(Number);
   const due = new Date(y, m - 1, d);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-  if (due < today)    return 'overdue';
-  if (due <= tomorrow) return 'soon';
-  return 'future';
+  if (due < today) return "overdue";
+  if (due <= tomorrow) return "soon";
+  return "future";
 }
 
 // ---------------------------------------------------------------------------
@@ -69,9 +71,11 @@ function DueDateBadge({ dueDate }: { dueDate: string | null }) {
   const status = getDueDateStatus(dueDate);
   if (!status || !dueDate) return null;
   const cls =
-    status === 'overdue' ? styles.deadlineOverdue
-    : status === 'soon'  ? styles.deadlineSoon
-    :                      styles.deadlineFuture;
+    status === "overdue"
+      ? styles.deadlineOverdue
+      : status === "soon"
+        ? styles.deadlineSoon
+        : styles.deadlineFuture;
   return (
     <span className={cls} data-testid={`due-date-${status}`}>
       Due: {dueDate}
@@ -83,12 +87,19 @@ function DueDateBadge({ dueDate }: { dueDate: string | null }) {
 // CardItem component
 // ---------------------------------------------------------------------------
 
-export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated }: Props) {
+export default function CardItem({
+  card,
+  allLists,
+  onDeleted,
+  onMoved,
+  onUpdated,
+}: Props) {
   // AC10: displayCard is always set from API response, never from local input
-  const [displayCard, setDisplayCard]   = useState<Card>(card);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [apiError, setApiError]          = useState<ApiError | null>(null);
-  const [targetListId, setTargetListId]  = useState<number>(0);
+  const [displayCard, setDisplayCard] = useState<Card>(card);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"preview" | "edit">("preview");
+  const [apiError, setApiError] = useState<ApiError | null>(null);
+  const [targetListId, setTargetListId] = useState<number>(0);
 
   const otherLists = allLists.filter((l) => l.id !== displayCard.list_id);
 
@@ -107,7 +118,9 @@ export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated
     if (targetListId === 0) return;
     if (targetListId === displayCard.list_id) return; // EC3
     try {
-      const updated = await updateCard(displayCard.id, { list_id: targetListId });
+      const updated = await updateCard(displayCard.id, {
+        list_id: targetListId,
+      });
       onMoved(displayCard.id, updated.list_id);
       setTargetListId(0);
     } catch (err) {
@@ -115,11 +128,18 @@ export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated
     }
   }
 
-  // ── Edit modal callbacks ──────────────────────────────────────────────────
+  // ── Modal callbacks ───────────────────────────────────────────────────────
+
+  /** Preview → Edit: keep the modal open, just switch mode. */
+  function handleEditFromPreview() {
+    setModalMode("edit");
+  }
+
+  /** Edit onSuccess: update displayCard from API response body (AC10). */
   function handleEditSuccess(updatedCard: Card) {
     const moved = updatedCard.list_id !== displayCard.list_id;
-    setDisplayCard(updatedCard);   // AC10: always from API response body
-    setShowEditModal(false);
+    setDisplayCard(updatedCard); // AC10: always from API response body
+    setModalOpen(false);
     if (moved) {
       onMoved(updatedCard.id, updatedCard.list_id);
     } else {
@@ -129,7 +149,13 @@ export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <li className={styles.card}>
+    <li
+      className={styles.card}
+      onClick={() => {
+        setModalMode("preview");
+        setModalOpen(true);
+      }}
+    >
       {apiError !== null && (
         <ErrorBanner
           status={apiError.status}
@@ -142,16 +168,23 @@ export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated
       <div className={styles.displayRow}>
         <span className={styles.title}>{displayCard.title}</span>
         <div className={styles.actions}>
-          <button
+          {/* <button
             className={styles.editBtn}
-            onClick={() => setShowEditModal(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setModalMode('edit');
+              setModalOpen(true);
+            }}
             aria-label="Edit"
           >
             Edit
-          </button>
+          </button> */}
           <button
             className={styles.deleteBtn}
-            onClick={handleDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
             aria-label={`Delete card ${displayCard.title}`}
           >
             Delete
@@ -160,7 +193,7 @@ export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated
       </div>
 
       {/* Description — plain text, only when set */}
-      {displayCard.description !== null && displayCard.description !== '' && (
+      {displayCard.description !== null && displayCard.description !== "" && (
         <p className={styles.description} data-testid="card-description">
           {displayCard.description}
         </p>
@@ -176,18 +209,20 @@ export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated
         </span>
       )}
 
-      {/* Move-to-list dropdown */}
+      {/* Move-to-list dropdown — stopPropagation so clicks here don't open preview */}
       {otherLists.length > 0 && (
-        <div className={styles.moveRow}>
+        <div className={styles.moveRow} onClick={(e) => e.stopPropagation()}>
           <select
             className={styles.moveSelect}
-            value={targetListId === 0 ? '' : String(targetListId)}
+            value={targetListId === 0 ? "" : String(targetListId)}
             onChange={(e) => setTargetListId(Number(e.target.value))}
             aria-label="Move to list"
           >
             <option value="">Move to…</option>
             {otherLists.map((l) => (
-              <option key={l.id} value={String(l.id)}>{l.name}</option>
+              <option key={l.id} value={String(l.id)}>
+                {l.name}
+              </option>
             ))}
           </select>
           <button
@@ -201,14 +236,15 @@ export default function CardItem({ card, allLists, onDeleted, onMoved, onUpdated
         </div>
       )}
 
-      {/* Edit modal */}
-      {showEditModal && (
+      {/* Single modal instance — mode prop controls preview vs edit */}
+      {modalOpen && (
         <CardModal
-          mode="edit"
+          mode={modalMode}
           card={displayCard}
           allLists={allLists}
           onSuccess={handleEditSuccess}
-          onClose={() => setShowEditModal(false)}
+          onEdit={handleEditFromPreview}
+          onClose={() => setModalOpen(false)}
         />
       )}
     </li>

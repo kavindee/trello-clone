@@ -226,3 +226,95 @@
   cursor: not-allowed;
   box-shadow: none;
 }
+
+/* ── Preview mode ─────────────────────────────────────────── */
+
+/* Small muted list-name label at the top of the modal */
+.previewListName {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.1rem;
+}
+
+/* Title displayed as a heading, not an input */
+.previewTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+/* Description — readable line-height */
+.previewDesc {
+  font-size: 0.875rem;
+  color: #334155;
+  line-height: 1.65;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Placeholder shown when description is null */
+.previewDescEmpty {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Date row — start + due side by side */
+.previewDateRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Start date label */
+.previewStartDate {
+  font-size: 0.78rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.18rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+/* Due date badge base */
+.previewDueDateBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.18rem 0.55rem;
+  border-radius: 6px;
+}
+
+/* Red — overdue */
+.previewDueDateOverdue {
+  composes: previewDueDateBadge;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+/* Yellow — due today or tomorrow */
+.previewDueDateSoon {
+  composes: previewDueDateBadge;
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+/* Grey — due in the future */
+.previewDueDateFuture {
+  composes: previewDueDateBadge;
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}

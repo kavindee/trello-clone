@@ -10,12 +10,15 @@
  *   EC8  — ErrorBanner on delete/move failure; UI unchanged
  *   EC9  — title + description rendered as text, not innerHTML
  *
- *   Display — description shown/hidden based on card.description
- *   Display — due_date badge (overdue/soon/future/none) based on card.due_date
- *   Display — start_date label shown/hidden based on card.start_date
- *   Edit    — clicking Edit opens CardModal in edit mode, pre-filled
- *   Edit    — onSuccess updates displayed card from API response (AC10)
- *   Edit    — onClose dismisses modal, card unchanged
+ *   Display  — description shown/hidden based on card.description
+ *   Display  — due_date badge (overdue/soon/future/none) based on card.due_date
+ *   Display  — start_date label shown/hidden based on card.start_date
+ *   Preview  — clicking card container opens preview modal
+ *   Preview  — clicking Edit button opens edit modal (not preview)
+ *   Preview  — clicking Delete does not open modal
+ *   Preview  — Edit button click does not bubble to card container
+ *   Edit     — onSuccess updates displayed card from API response (AC10)
+ *   Edit     — onClose dismisses modal, card unchanged
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -26,41 +29,58 @@ import type { Card } from '../types';
 vi.mock('../api');
 import * as api from '../api';
 
-// ── Mock CardModal — expose onSuccess / onClose via test buttons ───────────
+// ── Mock CardModal ─────────────────────────────────────────────────────────
+// Mirrors the real CardModal's prop surface.
+// - stopPropagation on the root div replicates portal isolation: clicks
+//   inside the mock won't bubble to the <li>'s onClick handler, just as the
+//   real portal-rendered modal is not a DOM descendant of the card.
+// - Save button only shown in non-preview modes (onSuccess provided & used).
+// - "Edit from preview" button only shown in preview mode (onEdit provided).
 vi.mock('../components/CardModal', () => ({
   default: ({
     onSuccess,
     onClose,
+    onEdit,
     card: modalCard,
     mode,
   }: {
-    onSuccess: (card: Card) => void;
+    onSuccess?: (card: Card) => void;
     onClose: () => void;
+    onEdit?: () => void;
     card?: Card;
     mode: string;
   }) => (
-    <div data-testid="edit-modal">
+    <div data-testid="edit-modal" onClick={(e) => e.stopPropagation()}>
       <span data-testid="modal-mode">{mode}</span>
       {modalCard && (
         <span data-testid="modal-card-title">{modalCard.title}</span>
       )}
-      <button
-        aria-label="modal-save"
-        onClick={() =>
-          onSuccess({
-            id: 7,
-            list_id: 3,
-            title: 'Server Title',
-            position: 0,
-            description: 'Server Desc',
-            start_date: '2025-02-01',
-            due_date: '2025-12-31',
-            created_at: '2025-01-01T00:00:00Z',
-          })
-        }
-      >
-        Save
-      </button>
+      {/* Save only available in create/edit modes */}
+      {mode !== 'preview' && onSuccess && (
+        <button
+          aria-label="modal-save"
+          onClick={() =>
+            onSuccess({
+              id: 7,
+              list_id: 3,
+              title: 'Server Title',
+              position: 0,
+              description: 'Server Desc',
+              start_date: '2025-02-01',
+              due_date: '2025-12-31',
+              created_at: '2025-01-01T00:00:00Z',
+            })
+          }
+        >
+          Save
+        </button>
+      )}
+      {/* Edit-from-preview button only in preview mode */}
+      {mode === 'preview' && onEdit && (
+        <button aria-label="modal-edit-from-preview" onClick={onEdit}>
+          Edit from preview
+        </button>
+      )}
       <button aria-label="modal-cancel" onClick={onClose}>Cancel</button>
     </div>
   ),
@@ -315,6 +335,68 @@ describe('CardItem — move to another list (AC12)', () => {
     fireEvent.click(screen.getByRole('button', { name: /confirm move/i }));
     await screen.findByRole('alert');
     expect(onMoved).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Preview modal — card click opens preview; Edit button opens edit
+// ---------------------------------------------------------------------------
+
+describe('CardItem — preview modal (card click)', () => {
+  it('clicking the card container opens the modal in preview mode', () => {
+    render(<CardItem {...defaultProps} />);
+    expect(screen.queryByTestId('edit-modal')).not.toBeInTheDocument();
+    // Click the title text — it bubbles up to the <li> onClick
+    fireEvent.click(screen.getByText('Fix the bug'));
+    expect(screen.getByTestId('edit-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('modal-mode').textContent).toBe('preview');
+  });
+
+  it('clicking the Edit button opens the modal in edit mode (not preview)', () => {
+    render(<CardItem {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    expect(screen.getByTestId('edit-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('modal-mode').textContent).toBe('edit');
+  });
+
+  it('Edit button click does not bubble to card container (mode stays edit, not preview)', () => {
+    render(<CardItem {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    // If stopPropagation was absent the li onClick would also fire, setting
+    // modalMode back to 'preview' (last setState wins in batch).
+    expect(screen.getByTestId('modal-mode').textContent).toBe('edit');
+  });
+
+  it('clicking Delete does not open the modal', async () => {
+    vi.mocked(api.deleteCard).mockResolvedValue(undefined);
+    render(<CardItem {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /delete card/i }));
+    expect(screen.queryByTestId('edit-modal')).not.toBeInTheDocument();
+  });
+
+  it('modal passes current card so preview is pre-filled', () => {
+    render(<CardItem {...defaultProps} />);
+    fireEvent.click(screen.getByText('Fix the bug'));
+    expect(screen.getByTestId('modal-card-title').textContent).toBe('Fix the bug');
+  });
+
+  it('onClose (Cancel) dismisses the preview modal', () => {
+    render(<CardItem {...defaultProps} />);
+    fireEvent.click(screen.getByText('Fix the bug'));
+    fireEvent.click(screen.getByRole('button', { name: /modal-cancel/i }));
+    expect(screen.queryByTestId('edit-modal')).not.toBeInTheDocument();
+  });
+
+  it('"Edit from preview" button switches modal to edit mode', () => {
+    render(<CardItem {...defaultProps} />);
+    // Open in preview mode
+    fireEvent.click(screen.getByText('Fix the bug'));
+    expect(screen.getByTestId('modal-mode').textContent).toBe('preview');
+    // Click the "Edit from preview" button inside the mock modal
+    fireEvent.click(screen.getByRole('button', { name: /modal-edit-from-preview/i }));
+    // Modal stays open, mode switches to edit
+    expect(screen.getByTestId('edit-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('modal-mode').textContent).toBe('edit');
   });
 });
 

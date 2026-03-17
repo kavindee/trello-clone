@@ -6,6 +6,178 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### CardModal preview mode + card-click interaction (2026-03-17)
+
+**Added**
+- `CardModal` `mode="preview"` — read-only card detail overlay:
+  - List name shown as a small muted label: "In list: [name]" (derived from
+    `allLists` via `card.list_id`)
+  - Title rendered as an `<h2>` heading (not an `<input>`)
+  - Description shown as a `<p>` paragraph, or "No description" in italic
+    muted style when `card.description` is null
+  - Start date shown as "Start: YYYY-MM-DD" when `card.start_date` is set
+  - Due date shown with same red / yellow / grey badge logic as the card
+    display (`data-testid="preview-due-date-{status}"`)
+  - Footer: **Close** button (calls `onClose`) on the left, **Edit** button
+    (calls `onEdit`) on the right — no form inputs, no submit button,
+    no validation
+  - Backdrop click and Escape key call `onClose` (same as other modes)
+  - Rendered via `createPortal(…, document.body)` (same as create/edit)
+
+**Changed — `CardModal.tsx`**
+- Props interface updated:
+  - `mode: 'create' | 'edit' | 'preview'`
+  - `onSuccess?: (card: Card) => void` (optional — not needed in preview)
+  - `onEdit?: () => void` (preview mode only)
+  - `onClose: () => void` (all modes)
+- `getDueDateStatus` helper added (same local-time logic as `CardItem`)
+- `onSuccess!(…)` non-null assertion used in `handleCreate` / `handleEdit`
+  (always provided by callers in create/edit modes)
+- Preview render is an early return after all hooks — hooks are always called
+  unconditionally; only the rendered JSX differs by mode
+
+**Changed — `CardItem.tsx`**
+- Replaced `showEditModal: boolean` state with `modalOpen: boolean` +
+  `modalMode: 'preview' | 'edit'` state (single modal instance)
+- `<li onClick>` opens the modal in **preview** mode — clicking anywhere on
+  the card shows the read-only overlay
+- Edit button `onClick`: `e.stopPropagation()` + opens modal in **edit** mode
+  directly (does not trigger the card's onClick)
+- Delete button `onClick`: `e.stopPropagation()` — delete proceeds without
+  opening the preview modal
+- Move row `<div onClick={(e) => e.stopPropagation()}>` — interacting with
+  the move dropdown/button does not open the preview modal
+- `handleEditFromPreview()`: just calls `setModalMode('edit')` — modal stays
+  open, mode switches in place (no unmount/remount)
+- Single `<CardModal mode={modalMode} … onEdit={handleEditFromPreview} />`
+  replaces the old conditional edit-only modal
+
+**Changed — `CardModal.module.css`**
+- Added preview-specific CSS classes:
+  `.previewListName` (muted uppercase label), `.previewTitle` (1.1 rem bold
+  heading), `.previewDesc` (readable, pre-wrap), `.previewDescEmpty` (italic
+  muted placeholder), `.previewDateRow` (flex wrap), `.previewStartDate`
+  (grey pill), `.previewDueDateBadge` base + `.previewDueDateOverdue` /
+  `.previewDueDateSoon` / `.previewDueDateFuture` (same red/yellow/grey
+  palette as CardItem badges)
+
+**Tests — `CardModal.test.tsx`** (+13 tests, 1 new `describe` block)
+- `defaultPreviewProps` fixture added (`mode:'preview'`, card, allLists,
+  `onEdit`, `onClose`)
+- `todayISO` computed at module load (avoids fake-timer / `waitFor` hangs)
+- Preview suite: title is heading not input; description shown/hidden;
+  "No description" when null; list name; overdue/due-soon/future/no badge;
+  start date shown/hidden; Edit button → `onEdit`; Close button → `onClose`;
+  backdrop click → `onClose`; Escape → `onClose`; no form inputs present
+
+**Tests — `CardItem.test.tsx`** (+7 tests, 1 new `describe` block + mock update)
+- **Mock updated**: `onSuccess` made optional; `onEdit` prop added;
+  root `<div onClick={(e) => e.stopPropagation()}>` added to replicate
+  portal isolation (prevents mock's button clicks from bubbling to `<li>`);
+  Save button only rendered when `mode !== 'preview' && onSuccess`;
+  "Edit from preview" button only rendered when `mode === 'preview' && onEdit`
+- New `'preview modal (card click)'` describe (7 tests):
+  clicking card title opens preview mode; clicking Edit button opens edit
+  mode; Edit click does not bubble (mode stays 'edit', not 'preview');
+  clicking Delete does not open modal; card prop passed to modal;
+  Cancel closes modal; "Edit from preview" button switches mode to edit
+
+**Verified**
+- `npm test` → **238 / 238 passed** (9 files), 0 failures
+- `npm run build` → TypeScript clean, 0 errors, 387 kB JS
+- Clicking a card opens the read-only preview modal ✓
+- Preview shows title as heading, description, list name, dates with badge ✓
+- "No description" shown when description is null ✓
+- Edit button in preview switches to edit mode in the same modal ✓
+- Edit button in card opens edit mode directly (not preview first) ✓
+- Delete button does not open the preview modal ✓
+- Escape and backdrop click close the preview modal ✓
+- No duplicate modals, no form inside list column ✓
+- No backend files modified ✓
+
+---
+
+### Fix: CardModal portal — prevent duplicate/clipped modal rendering (2026-03-17)
+
+**Root cause**
+`CardModal` was rendered as a normal React child inside `<li className={styles.card}>`.
+`CardItem.module.css` applies `transform: translateY(-1px)` on `.card:hover`.
+Any CSS `transform` on an ancestor element creates a new **CSS containing block**,
+which breaks `position: fixed` for all descendants — the backdrop becomes fixed
+relative to the card element's bounding box rather than the viewport.
+Additionally `ListColumn`'s `.column { overflow: hidden }` clipped the mis-positioned
+backdrop to the column width. Together these caused the modal to appear simultaneously
+*inside* the card (clipped by the column) and as a second broken overlay on the page.
+
+**Fix — `frontend/src/components/CardModal.tsx`**
+- Added `import { createPortal } from 'react-dom'`
+- Wrapped the entire `return (...)` in `createPortal(..., document.body)`
+- The backdrop + modal box now mount directly on `document.body`, escaping every
+  ancestor's stacking context, `overflow`, and `transform` completely
+- Zero changes to logic, data, props, or CSS
+
+**No other files changed** — `CardItem.tsx`, `ListColumn.tsx`, and all CSS files
+are untouched. The `transform` on `.card:hover` is intentional UX polish; removing
+it would be the wrong fix.
+
+**Verified**
+- `npm test` → **216 / 216 passed** (9 files), 0 failures
+- `npm run build` → TypeScript clean, 0 errors, 385 kB JS
+- Edit button opens one modal centered on screen (no duplicate) ✓
+- No edit form rendered inside the list column ✓
+- Backdrop covers full viewport regardless of card hover state ✓
+- Modal closes on Cancel, Escape, and backdrop click ✓
+- No backend files modified ✓
+
+---
+
+### CardItem display + CardModal edit integration (Frontend) (2026-03-17)
+
+**Changed**
+- `frontend/src/components/CardItem.tsx` — display mode fully wired to
+  `description`, `start_date`, `due_date`; old inline edit form removed entirely:
+  - Description rendered as plain `<p>` text child below the title when non-null/non-empty (`data-testid="card-description"`); never injected as innerHTML (EC9)
+  - Due-date badge driven by `getDueDateStatus(due_date)` → `'overdue' | 'soon' | 'future' | null`:
+    - `due_date < today` → red `.deadlineOverdue` badge (`data-testid="due-date-overdue"`)
+    - `due_date` is today or tomorrow → yellow `.deadlineSoon` badge (`data-testid="due-date-soon"`)
+    - `due_date > tomorrow` → grey `.deadlineFuture` badge (`data-testid="due-date-future"`)
+    - `due_date` null → no badge rendered
+  - Start-date label "Start: YYYY-MM-DD" shown via `<span className={styles.startDateLabel}>` only when `start_date` is non-null
+  - Edit button opens `<CardModal mode="edit" card={displayCard} allLists={allLists} />` instead of the old inline form
+  - `handleEditSuccess(updatedCard)` sets `displayCard` from API response body (AC10), closes modal, then calls `onMoved` or `onUpdated` depending on whether `list_id` changed
+  - No inline `editTitle` / `editDeadline` state remains; all editing delegated to `CardModal`
+- `frontend/src/styles/CardItem.module.css` — description and start-date styles:
+  - `.description` — `font-size: 0.78rem`, `color: #64748b`, `margin: 0`
+  - `.startDateLabel` — `font-size: 0.68rem`, `color: #94a3b8`
+  - Badge classes `.deadlineOverdue` / `.deadlineSoon` / `.deadlineFuture` retained and compose from `.deadlineBadge` base
+
+**Tests**
+- `frontend/src/test/CardItem.test.tsx` — updated and extended (all 28 tests):
+  - Mock card objects carry `description`, `start_date`, `due_date` (all nullable)
+  - Old inline-edit-mode describe blocks removed
+  - New: "description display" (3 tests) — renders when set, hidden when null, XSS-safe plain text
+  - New: "due_date badge" (5 tests) — null→no badge, past date→overdue, today→soon, far future→future, badge shows date string
+  - New: "start_date label" (2 tests) — shown when set, hidden when null
+  - "edit via CardModal" (9 tests): Edit opens modal in edit mode; modal receives current card; `onSuccess` updates title + description from API body; `onSuccess` calls `onUpdated`; `onClose` dismisses without change
+- `frontend/src/test/CardModal.test.tsx` — complete test suite (34 tests):
+  - Create mode: renders all fields; title validation (empty, whitespace, >255); description validation (>1000); date order (start > due → error; same → ok; start < due → ok); successful create calls `createCard` + `onSuccess` + `onClose`; API failure → `ErrorBanner` inside modal, modal stays open
+  - Edit mode: pre-fills title, description, start_date, due_date from card prop; save calls `updateCard` + `onSuccess`; API failure → `ErrorBanner`
+  - Close behaviours: Cancel button, backdrop click, Escape key all call `onClose`; clicking modal box does not propagate to backdrop
+
+**Verified**
+- `npm test` → **216 / 216 passed** (9 files), 0 failures
+- `npm run build` → TypeScript clean, 0 errors, 384 kB JS
+- Description renders as plain text below card title when set ✓
+- Description absent when `description` is null ✓
+- Start-date label "Start: YYYY-MM-DD" shown only when `start_date` is set ✓
+- Due-date badge colour logic: red (overdue) / yellow (today or tomorrow) / grey (future) / none (null) ✓
+- Edit button opens `CardModal` pre-filled with all current card values ✓
+- `onSuccess` updates `displayCard` from API response body (AC10) ✓
+- No backend files modified ✓
+- `ListColumn.tsx` and `BoardDetail.tsx` untouched ✓
+
+---
+
 ### Card creation modal + types update (Frontend) (2026-03-16)
 
 **Changed**

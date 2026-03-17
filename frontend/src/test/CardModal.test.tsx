@@ -11,6 +11,8 @@
  *   - Backdrop click → onClose called
  *   - Escape key → onClose called
  *   - Cancel button → onClose called, no API call
+ *   - Preview mode: read-only — title as heading, description, list name,
+ *     due-date badge, start date; Edit/Close buttons; no form inputs
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -55,10 +57,14 @@ vi.mock('react-datepicker/dist/react-datepicker.css', () => ({}));
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+// Absolute dates that don't require fake timers
+const _n = new Date();
+const todayISO = `${_n.getFullYear()}-${String(_n.getMonth() + 1).padStart(2, '0')}-${String(_n.getDate()).padStart(2, '0')}`;
+
 const mockAllLists = [
-  { id: 1, board_id: 1, name: 'Todo',   position: 0, deadline: null as string | null, created_at: '' },
-  { id: 2, board_id: 1, name: 'In Prog',position: 1, deadline: null as string | null, created_at: '' },
-  { id: 3, board_id: 1, name: 'Done',   position: 2, deadline: null as string | null, created_at: '' },
+  { id: 1, board_id: 1, name: 'Todo',    position: 0, deadline: null as string | null, created_at: '' },
+  { id: 2, board_id: 1, name: 'In Prog', position: 1, deadline: null as string | null, created_at: '' },
+  { id: 3, board_id: 1, name: 'Done',    position: 2, deadline: null as string | null, created_at: '' },
 ];
 
 const mockCard: Card = {
@@ -96,6 +102,14 @@ const defaultEditProps = {
   card: mockCard,
   allLists: mockAllLists,
   onSuccess: vi.fn(),
+  onClose: vi.fn(),
+};
+
+const defaultPreviewProps = {
+  mode: 'preview' as const,
+  card: mockCard,
+  allLists: mockAllLists,
+  onEdit: vi.fn(),
   onClose: vi.fn(),
 };
 
@@ -452,5 +466,107 @@ describe('CardModal — edit mode', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.getByText(/500/)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Preview mode
+// ---------------------------------------------------------------------------
+
+describe('CardModal — preview mode', () => {
+  it('renders title as a heading element, not an input', () => {
+    render(<CardModal {...defaultPreviewProps} />);
+    // No title textbox should exist in preview
+    expect(screen.queryByRole('textbox', { name: /card title/i })).not.toBeInTheDocument();
+    // Title rendered as plain text in a heading
+    expect(screen.getByRole('heading', { name: 'Existing card' })).toBeInTheDocument();
+  });
+
+  it('renders description when set', () => {
+    render(<CardModal {...defaultPreviewProps} />);
+    expect(screen.getByText('Existing desc')).toBeInTheDocument();
+  });
+
+  it('renders "No description" when description is null', () => {
+    render(<CardModal {...defaultPreviewProps} card={{ ...mockCard, description: null }} />);
+    expect(screen.getByText(/no description/i)).toBeInTheDocument();
+  });
+
+  it('renders list name correctly from allLists', () => {
+    // mockCard.list_id = 2, allLists has id:2 name:'In Prog'
+    render(<CardModal {...defaultPreviewProps} />);
+    expect(screen.getByText(/In list:.*In Prog/)).toBeInTheDocument();
+  });
+
+  it('shows overdue badge when due_date is in the past', () => {
+    render(<CardModal {...defaultPreviewProps} card={{ ...mockCard, due_date: '2020-01-01' }} />);
+    expect(screen.getByTestId('preview-due-date-overdue')).toBeInTheDocument();
+    expect(screen.queryByTestId('preview-due-date-soon')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('preview-due-date-future')).not.toBeInTheDocument();
+  });
+
+  it('shows due-soon badge when due_date is today', () => {
+    render(<CardModal {...defaultPreviewProps} card={{ ...mockCard, due_date: todayISO }} />);
+    expect(screen.getByTestId('preview-due-date-soon')).toBeInTheDocument();
+    expect(screen.queryByTestId('preview-due-date-overdue')).not.toBeInTheDocument();
+  });
+
+  it('shows future badge when due_date is far away', () => {
+    render(<CardModal {...defaultPreviewProps} card={{ ...mockCard, due_date: '2099-12-31' }} />);
+    expect(screen.getByTestId('preview-due-date-future')).toBeInTheDocument();
+    expect(screen.queryByTestId('preview-due-date-overdue')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('preview-due-date-soon')).not.toBeInTheDocument();
+  });
+
+  it('shows no due-date badge when due_date is null', () => {
+    render(<CardModal {...defaultPreviewProps} card={{ ...mockCard, due_date: null }} />);
+    expect(screen.queryByTestId('preview-due-date-overdue')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('preview-due-date-soon')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('preview-due-date-future')).not.toBeInTheDocument();
+  });
+
+  it('shows start date when set', () => {
+    render(<CardModal {...defaultPreviewProps} />);
+    // mockCard.start_date = '2025-03-01'
+    expect(screen.getByText(/Start:.*2025-03-01/)).toBeInTheDocument();
+  });
+
+  it('does not render start date when start_date is null', () => {
+    render(<CardModal {...defaultPreviewProps} card={{ ...mockCard, start_date: null }} />);
+    expect(screen.queryByText(/Start:/)).not.toBeInTheDocument();
+  });
+
+  it('Edit button calls onEdit', () => {
+    const onEdit = vi.fn();
+    render(<CardModal {...defaultPreviewProps} onEdit={onEdit} />);
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it('Close button calls onClose', () => {
+    const onClose = vi.fn();
+    render(<CardModal {...defaultPreviewProps} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('backdrop click calls onClose in preview mode', () => {
+    const onClose = vi.fn();
+    render(<CardModal {...defaultPreviewProps} onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('card-modal-backdrop'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape key calls onClose in preview mode', () => {
+    const onClose = vi.fn();
+    render(<CardModal {...defaultPreviewProps} onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render form inputs (no title textbox, description textarea)', () => {
+    render(<CardModal {...defaultPreviewProps} />);
+    expect(screen.queryByRole('textbox', { name: /card title/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /description/i })).not.toBeInTheDocument();
   });
 });
